@@ -1,0 +1,31 @@
+done 1.) Knoten automatisch benennen: a,b,c, ...
+done 2.) Knoten per Rechtsklick umbenennen und Startknoten/Zielknoten ändern
+done 3.) Kantenkapazitäten -reisedauern bearbeiten
+done 4.) Kantenkapazitäten -reisedauern beim hinzufügen der Kante angeben
+done 5.) Start- und Zielknoten hervorheben, mit checkbox beim Erzeugen festlegen?
+done - setzen der Knotenkoordinaten auf einen kleineren Bereich hat dieses Verhalten verbessert - so ist es jetzt wahrscheinlich wie gewollt 6.) Kantenlabels und Kanten verschwinden beim zoomen?
+7.) größere Arrows?
+done 8.) parallele Kanten automatisch curved, nebeneinander. Momentan zufällig aus gerade und curved siehe parallel-edges.html
+done? - werden wegen 6.) jetzt auch meistens angezeigt 9.) Knotenlabels immer anzeigen oder nur bei hover?
+done durch zusätzlichen import aus edge-renderers.html übernomen 10.) kantenlabels position bei kante curved?
+11.) Leerzeile nahc anzeigeKante ?
+done 12.) Knotenlabels ab 25. Knoten mehrfach?
+done WICHTIG: erstmal graph in python einlesen testen
+done - Quellvideo: https://www.youtube.com/watch?v=M-pil5oHw0w, evtl. Quelle expaning menu: https://www.youtube.com/watch?v=rgUp302f_lY 13.) Gesamtes Layout verschönern
+done - stimmt, wird nicht benötigt 14.) edgeValues wird nicht mehr benötigt?
+done - ersetzt durch 19.) 15.) hinzufügen neuer Knoten in Mitte des Plots
+16.) gemeinsamer edgeCount für alle Knotenpaare?
+17.) rightClickEdge funktioniert nicht bei parallelen Kanten, sonst auch manchmal ausfälle?
+18.) einschränkungen bzgl s,t bei Benennung der Knoten/ doppelte Belegung - oder ist dies gar nicht notwendig, da start, zielknoten sowieso intern identifiziert werden können - dann aber trotzdem bei einlesen in Programm umbennenung der doppelt belgeten s, t Knoten?
+19.) neu erstellte Knoten an clickposition anzeigen
+done 20.) mehrere Knoten/Kanten hinzufügen können, nach nur <<einem>> Buttonclick
+21.) unterscheidung click und drag im Knoten-hinzufüge-modus
+done 22.) Knoten hinzufügen lässt sich nicht mehr ausschalten?
+23.) kante entfernen Button?
+24.) edgeCount wird bei Entfernen von Kante durch entfernen von Knoten nicht aktualisiert - kann eventuell ignoriert werden, nur einfluss auf Kantenkrümmung??
+25.) labels paralleler Kanten werden übereinander geschrieben
+26.) ESC taste soll alle Modi abbrechen
+27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbeitet und anschließend ein weitere rechtsgeklickt, so werden beide Knoten geupdatet!!!
+28.) Programm terminiert nicht. wann soll es terminieren?
+
+hier weiter: kontextmenü in test datei nicht an richtiger stelle: aus irgendeinem grund hat hier contextnodes style left keinen wert, aber in der alten datei schon???

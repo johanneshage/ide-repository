@@ -1,0 +1,51 @@
+/* contextmenu */
+#context {
+	display: block;
+	background-color: #fffbf0;
+	border: 1px solid #e7c157;
+	border-radius: 0 .5em .5em;
+	position: absolute;
+	z-index: 999;
+	padding: 10px;
+}
+
+#contextNodes {
+	display: block;
+	background-color: #fffbf0;
+	border: 1px solid #e7c157;
+	border-radius: 0 .5em .5em;
+	position: absolute;
+	z-index: 999;
+	padding: 10px;
+}
+
+/*#contextCheckbox {
+	type: checkbox;
+}*/
+
+#context button {
+	cursor: pointer;
+	background: white;
+	border: 0;
+}
+
+/*img {
+	background: white;
+	border-radius: 1em;
+}*/
+
+aside {
+	float: right;
+	max-width: 20em;
+	border: 1px solid #3983ab;
+	padding: 1em;
+}
+
+p,
+label {
+    font: 1rem 'Fira Sans', sans-serif;
+}
+
+input {
+    margin: .4rem;
+}

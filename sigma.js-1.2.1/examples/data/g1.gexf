@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gexf xmlns="http://www.gephi.org/gexf" xmlns:viz="http://www.gephi.org/gexf/viz">
+  <graph type="static">
+    <meta>
+      <creator>NetworkX 2.3</creator>
+      <lastmodified>03/03/2020</lastmodified>
+    </meta>
+	<attributes class="node" type="static">
+			<attribute id="0" title="nodedef" type="string"/>
+			<attribute id="1" title="label" type="string"/>
+			<attribute id="2" title="occurrences" type="integer"/>
+	</attributes>
+    <nodes>
+      <node id="s1" label="s1" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="s2" label="s2" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="s3" label="s3" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="s4" label="s4" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="x" label="x" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="v" label="v" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="w" label="w" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="y" label="y" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="t1" label="t1" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+      <node id="t2" label="t2" />
+		<attvalues>
+			<attvalue id="0" value="n0"/>
+			<attvalue id="1" value="1831"/>
+			<attvalue id="2" value="1"/>
+		</attvalues>
+    </nodes>
+    <edges />
+  </graph>
+</gexf>
