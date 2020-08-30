@@ -371,7 +371,7 @@
 			   * EVENTS BINDING:
 			   * ***************
 			   */
-			var b1 = document.getElementById('buttonAdd'); //button which adds one node to the graph (per click)
+			var b1 = document.getElementById('buttonAdd'); // button which adds one node to the graph (per click)
 			//var button = document.querySelector('button');
 			b1.addEventListener('click', function(e) {
 				// Find neighbors:
@@ -586,23 +586,19 @@
 			}, false);
 
 			//https://wiki.selfhtml.org/wiki/JavaScript/Tutorials/Kontextmen%C3%BC
-			//use own contexmenu
+			// use own contexmenu
 			document.addEventListener('DOMContentLoaded', function () {
 				s.bind('rightClickEdge', function (e) {
 
 					var selected = e.data.edge;
 					
-					//dom.addEventListener('contextmenu', function(e) { 
-						//e.preventDefault();
-						//showContextMenu();
-					//}, false);
-					
-					//function showContextMenu (){
-					// show contextmenu
+					// select div "context"
 					var contextSelector = document.querySelector('#context');
+					// save click position
 					var xpos = e.data.captor.clientX;
 					var ypos = e.data.captor.clientY;
 					
+					// save capacity and traveltime of selected edge
 					document.getElementById('kap').value = selected.properties.capacity;
 					document.getElementById('len').value = selected.properties.traveltime;
 					
@@ -613,13 +609,13 @@
 						s.refresh();
 						hideContextMenu();
 					});
+					
+					hideContextMenuNodes();
 					var newString = "Kante: (" + s.graph.nodes()[s.graph.edges()[selected.id].source].label + "," + s.graph.nodes()[s.graph.edges()[selected.id].target].label + ")";
+					// set text of contextmenu
 					document.getElementById('anzeigeKante').innerHTML = newString;
-					contextSelector.style.display = "block";
-					contextSelector.style.left = xpos;
-					contextSelector.style.top = ypos;
-				  //}
-				 
+					//set visibility and position of contexmenu
+					contextSelector.setAttribute('style', 'display:block; left:' + xpos + 'px; top:' + ypos + 'px');
 				});
 			}); 
 
@@ -628,6 +624,7 @@
 
 					var selected = e.data.node;
 					
+					// set checkbox of s (of t) to checked, if clicked node is a source (a sink)
 					if (selected.type == 's') {
 						document.getElementById("context-s-checkbox").checked = true;
 						document.getElementById("context-t-checkbox").checked = false;
@@ -636,17 +633,12 @@
 						document.getElementById("context-s-checkbox").checked = false;
 					}
 					
-					dom.addEventListener('contextmenu', function(e) { //?????
-						//e.preventDefault();
-						//showContextMenu();
-					}, false);
-					
-					//function showContextMenu (){
-					// show contextmenu
+					// select div "contextNodes"
 					var contextSelector = document.querySelector('#contextNodes');
-					console.log("SLELSSLSL", contextSelector);
+					// save click position
 					var xpos = e.data.captor.clientX;
 					var ypos = e.data.captor.clientY;
+					// make checkboxes for source and sink property of a node customizable
 					document.getElementById('update2').addEventListener('click', function(e) {
 						if(document.getElementById("context-s-checkbox").checked && selected.type != 's') {
 							if (selected.type == 't') {
@@ -683,15 +675,14 @@
 						s.refresh();
 						hideContextMenuNodes();
 					});
+					hideContextMenu();
 					var newString = "Knoten: " + s.graph.nodes()[selected.id].label;
+					// set text of contextmenu
 					document.getElementById('anzeigeKnoten').innerHTML = newString;
-					contextSelector.style.display = "block";
-					contextSelector.style.left = xpos;
-					contextSelector.style.top = ypos;	
+					// set visibility and position of contextmenu
+					contextSelector.setAttribute('style', 'display:block; left:' + xpos + 'px; top:' + ypos + 'px');	
 				});
 			}); 
-
-			s.refresh();
 
 			function hideContextMenu () {
 				var menu = document.querySelector('#context')
@@ -705,12 +696,10 @@
 
 			// EventListener to turn off contexmenu
 			dom.addEventListener('click', function(e) {
-				//var button = e.which || e.button;
-				//if ( button === 1 ) {
 				hideContextMenu();
 				hideContextMenuNodes();
-				//}
 			});
+			
 			// Listener for ESC-button
 			window.onkeyup = function(e) {
 				if ( e.keyCode === 27 ) {
