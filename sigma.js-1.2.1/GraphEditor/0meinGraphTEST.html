@@ -321,24 +321,6 @@
 						$(".class2").prop("disabled", false);
 					}
 			});	  
-				  
-			var theThing = document.querySelector("#thing");
-				  
-			// click-Position:
-			function getClickPosition(e) {
-				var parentPosition = getPosition(e.currentTarget);
-				var xPosition = e.clientX - parentPosition.x //- (theThing.clientWidth / 2);
-				var yPosition = e.clientY - parentPosition.y //- (theThing.clientHeight / 2);
-				
-				//alert("x,y" + xPosition + yPosition);
-				 
-				//theThing.style.left = xPosition + "px";
-				//theThing.style.top = yPosition + "px";
-				
-				//alert("x,y" + xPosition + yPosition);
-				console.log("berechnete Positionen", xPosition, yPosition);
-				return 0
-			}
 			 
 			// Helper function to get an element's exact position
 			function getPosition(el) {
@@ -618,11 +600,52 @@
 					contextSelector.setAttribute('style', 'display:block; left:' + xpos + 'px; top:' + ypos + 'px');
 				});
 			}); 
+			
+			var selected;
+			
+			function updateByCheckbox () {
+					if(document.getElementById("context-s-checkbox").checked && selected.type != 's') {
+						if (selected.type == 't') {
+							tCount -= 1;
+						}
+						selected.type = 's';
+						selected.color = '#108DC3';
+						sCount += 1;
+						selected.label = 's' + sCount;
+					} else if(document.getElementById("context-t-checkbox").checked && selected.type != 't') {
+						if (selected.type == 's') {
+							sCount -= 1;
+						}
+						selected.type = 't';
+						tCount += 1;
+						selected.color = tColors[(tCount -1) % tColors.length];
+						selected.label = 't' + tCount;
+					} else if(!(document.getElementById("context-s-checkbox").checked) && !(document.getElementById("context-t-checkbox").checked) && (selected.type == 's' || selected.type == 't')) {
+						selected.color = '#500';
+						if(selected.type == 's') {
+							sCount -= 1;
+						} else {
+							tCount -= 1;
+						}
+						selected.type = 'n';
+						//selected.label = nodeLabels[(nId - sCount - tCount) %24];
+						//if(nId - sCount -tCount > 23){
+						//	nodeinit.label += Math.floor((nId - sCount - tCount) /24);
+						//}
+					};			
+					if(!(document.getElementById("context-s-checkbox").checked) && !(document.getElementById("context-t-checkbox").checked)) {
+						s.graph.nodes()[selected.id].label = document.getElementById('nam').value;
+					}
+					s.refresh();
+					//document.getElementById('update2').removeEventListener('click', updateByCheckbox);
+					hideContextMenuNodes();
+				}
 
 			document.addEventListener('DOMContentLoaded', function () {
+				var first = true;
 				s.bind('rightClickNode', function (e) {
 
-					var selected = e.data.node;
+					selected = e.data.node;
 					
 					// set checkbox of s (of t) to checked, if clicked node is a source (a sink)
 					if (selected.type == 's') {
@@ -639,42 +662,8 @@
 					var xpos = e.data.captor.clientX;
 					var ypos = e.data.captor.clientY;
 					// make checkboxes for source and sink property of a node customizable
-					document.getElementById('update2').addEventListener('click', function(e) {
-						if(document.getElementById("context-s-checkbox").checked && selected.type != 's') {
-							if (selected.type == 't') {
-								tCount -= 1;
-							}
-							selected.type = 's';
-							selected.color = '#108DC3';
-							sCount += 1;
-							selected.label = 's' + sCount;
-						} else if(document.getElementById("context-t-checkbox").checked && selected.type != 't') {
-							if (selected.type == 's') {
-								sCount -= 1;
-							}
-							selected.type = 't';
-							tCount += 1;
-							selected.color = tColors[(tCount -1) % tColors.length];
-							selected.label = 't' + tCount;
-						} else if(!(document.getElementById("context-s-checkbox").checked) && !(document.getElementById("context-t-checkbox").checked) && (selected.type == 's' || selected.type == 't')) {
-							selected.color = '#500';
-							if(selected.type == 's') {
-								sCount -= 1;
-							} else {
-								tCount -= 1;
-							}
-							selected.type = 'n';
-							//selected.label = nodeLabels[(nId - sCount - tCount) %24];
-							//if(nId - sCount -tCount > 23){
-							//	nodeinit.label += Math.floor((nId - sCount - tCount) /24);
-							//}
-						};			
-						if(!(document.getElementById("context-s-checkbox").checked) && !(document.getElementById("context-t-checkbox").checked)) {
-							s.graph.nodes()[selected.id].label = document.getElementById('nam').value;
-						}
-						s.refresh();
-						hideContextMenuNodes();
-					});
+					console.log("CLICKED");
+					document.getElementById('update2').addEventListener('click', updateByCheckbox, {once:true});
 					hideContextMenu();
 					var newString = "Knoten: " + s.graph.nodes()[selected.id].label;
 					// set text of contextmenu
@@ -698,6 +687,8 @@
 			dom.addEventListener('click', function(e) {
 				hideContextMenu();
 				hideContextMenuNodes();
+				document.getElementById('update2').removeEventListener('click', updateByCheckbox);
+				console.log("UNBIND");
 			});
 			
 			// Listener for ESC-button

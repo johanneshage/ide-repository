@@ -25,5 +25,6 @@ done 22.) Knoten hinzufügen lässt sich nicht mehr ausschalten?
 24.) edgeCount wird bei Entfernen von Kante durch entfernen von Knoten nicht aktualisiert - kann eventuell ignoriert werden, nur einfluss auf Kantenkrümmung??
 25.) labels paralleler Kanten werden übereinander geschrieben
 26.) ESC taste soll alle Modi abbrechen
-27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbeitet und anschließend ein weitere rechtsgeklickt, so werden beide Knoten geupdatet!!!
+done 27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbeitet und anschließend ein weitere rechtsgeklickt, so werden beide Knoten geupdatet!!!
 28.) reset button
+29.) Rechtsklick auf knoten ohne update führt zu falscher setzung der checkboxen beim Rechtsklicken des nächsten Knotens

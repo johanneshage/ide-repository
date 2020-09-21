@@ -142,8 +142,8 @@
 		</a>
 		<a class="active"> <div id="button-container"> <button type="button" id="buttonEdgeDel">Kanten entfernen</button> </div> </a>
 		<a class="active"> <div id="button-container"> <button type="button" id="loadData" class="side_button">Download</button> </div> </a>
-		<link href="00sidebar.css" rel="stylesheet" type="text/css"> 
-		<link href="00contextmenu.css" rel="stylesheet" type="text/css"> 
+		<link href="00sidebar.css" rel="stylesheet" type="text/css">
+		<link href="00contextmenu.css" rel="stylesheet" type="text/css">
   </div> 
   
   <!-- own contextmenu for edges -->
@@ -647,6 +647,8 @@ s.bind('rightClickNode', function (e) {
 	var newString = "Knoten: " + s.graph.nodes()[selected.id].label;
 	document.getElementById('anzeigeKnoten').innerHTML = newString;
 	contextSelector.style.display = "block";
+	console.log("contextselector", contextSelector.style.left);
+	console.log("xpos", xpos);
 	contextSelector.style.left = xpos;
 	console.log("contextselector", contextSelector.style.left);
 	contextSelector.style.top = ypos;
