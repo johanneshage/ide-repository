@@ -21,10 +21,11 @@ done - ersetzt durch 19.) 15.) hinzufügen neuer Knoten in Mitte des Plots
 done 20.) mehrere Knoten/Kanten hinzufügen können, nach nur <<einem>> Buttonclick
 21.) unterscheidung click und drag im Knoten-hinzufüge-modus
 done 22.) Knoten hinzufügen lässt sich nicht mehr ausschalten?
-23.) kante entfernen Button?
+done 23.) kante entfernen Button?
 24.) edgeCount wird bei Entfernen von Kante durch entfernen von Knoten nicht aktualisiert - kann eventuell ignoriert werden, nur einfluss auf Kantenkrümmung??
 25.) labels paralleler Kanten werden übereinander geschrieben
 26.) ESC taste soll alle Modi abbrechen
 done 27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbeitet und anschließend ein weitere rechtsgeklickt, so werden beide Knoten geupdatet!!!
 28.) reset button
 29.) Rechtsklick auf knoten ohne update führt zu falscher setzung der checkboxen beim Rechtsklicken des nächsten Knotens
+30.) Rechtsklick auf Kante -> Kapazität und Reisezeit standardmäßig auf 1, nicht auf richtigem Wert

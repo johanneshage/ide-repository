@@ -3,9 +3,9 @@
 	<head>
 		<meta charset="utf-8">
 		<title>Sidebar Dashboard Template</title>
-		<link rel="stylesheet" href="0sidebarTEST.css">
+		<link rel="stylesheet" href="sidebar.css">
 		<!-- <link rel="stylesheet" href="00contextmenu.css"> -->
-		<link href="00contextmenu.css" rel="stylesheet" type="text/css"> 
+		<link href="contextmenu.css" rel="stylesheet" type="text/css"> 
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/css/all.min.css">
 		<!-- START SIGMA IMPORTS -->
 		<script src="../src/sigma.core.js"></script>
@@ -235,6 +235,7 @@
 				edgeMode = false,
 				nodeMode = false,
 				nodeDelMode = false,
+				edgeDelMode = false,
 				nId = -1,
 				eId = -1,
 				edgeCount = 0,
@@ -381,14 +382,15 @@
 				} else if(edgeMode) {
 					s.unbind('clickNode');
 					edgeMode = false;
+				} else if (edgeDelMode) {
+					s.unbind('clickEdge');
+					edgeDelMode = false;
 				}
 				
 				if (nodeMode) {
 					document.getElementById('textfeld').style.visibility = "visible";
 					document.getElementById('textfeld').innerHTML = "Knoten hinzufügen:";
-					s.bind('click', function(e) {
-						console.log(dom.offsetWidth);
-						console.log(event.pageX, event.pageY, event.clientX, event.clientY, sigma.utils.getX(event), sigma.utils.getX(event));			
+					s.bind('click', function(e) {		
 						
 						nodeinit = {
 							id: (id = (++nId) + ''),
@@ -445,6 +447,9 @@
 				} else if(nodeDelMode) {
 					s.unbind('clickNode');
 					nodeDelMode = false;
+				} else if(edgeDelMode) {
+					s.unbind('clickEdge');
+					edgeDelMode = false;
 				}
 				
 				function chooseStart() { //"chooseStart" and "chooseTarget" call each other so it's possible to create multiple edges with only one click on "b2"
@@ -497,18 +502,18 @@
 			  
 			var b3 = document.getElementById('buttonDel');
 			b3.addEventListener('click', function(e) {
-				var x,
-					y,
-					p,
-					id,
-					neighbors;
+				<!-- var x, -->
+					<!-- y, -->
+					<!-- p, -->
+					<!-- id, -->
+					<!-- neighbors; -->
 
-				x = sigma.utils.getX(e) - dom.offsetWidth / 2;
-				y = sigma.utils.getY(e) - dom.offsetHeight / 2;
+				<!-- x = sigma.utils.getX(e) - dom.offsetWidth / 2; -->
+				<!-- y = sigma.utils.getY(e) - dom.offsetHeight / 2; -->
 
-				p = c.cameraPosition(x, y);
-				x = p.x;
-				y = p.y;
+				<!-- p = c.cameraPosition(x, y); -->
+				<!-- x = p.x; -->
+				<!-- y = p.y; -->
 				
 				nodeDelMode = !nodeDelMode;
 				
@@ -518,6 +523,9 @@
 				} else if(edgeMode) {
 					s.unbind('clickNode'); //if button "b3" is pressed while "edgeMode" == 'true', then "edgeMode" has to be set to 'false' and the current process of addEdge has to be canceled, therefore unbind 'clickNode'
 					edgeMode = false;
+				} else if(edgeDelMode) {
+					s.unbind('clickEdge');
+					edgeDelMode = false;
 				}
 					
 				if(nodeDelMode) {
@@ -566,6 +574,35 @@
 				// Alternative
 				e.preventDefault();
 			}, false);
+			
+			var b5 = document.getElementById('buttonDelEdge');
+			b5.addEventListener('click', function(e) {
+				edgeDelMode = !edgeDelMode;
+				
+				if(edgeMode) {
+					s.unbind('clickNode');
+					edgeMode = false;
+				} else if(nodeMode) {
+					s.unbind('click'); //if button "b5" is pressed while "nodeMode" == 'true', then "nodeMode" has to be set to 'false' and the current process of addNode has to be canceled, therefore unbind 'click'
+					nodeMode = false;
+				} else if(nodeDelMode) {
+					s.unbind('clickNode');
+					nodeDelMode = false;
+				}
+					
+				if(edgeDelMode) {
+					document.getElementById('textfeld').style.visibility = "visible";
+					document.getElementById('textfeld').innerHTML = "wähle zu entfernende Kante"
+					s.bind('clickEdge', function(e) {
+						edgeCount -= 1;
+						s.graph.dropEdge(e.data.edge.id);
+						s.refresh();
+					});
+				} else {
+					document.getElementById('textfeld').style.visibility = "hidden";
+					s.unbind('clickEdge');
+				};	
+			}, false);
 
 			//https://wiki.selfhtml.org/wiki/JavaScript/Tutorials/Kontextmen%C3%BC
 			// use own contexmenu
@@ -593,7 +630,7 @@
 					});
 					
 					hideContextMenuNodes();
-					var newString = "Kante: (" + s.graph.nodes()[s.graph.edges()[selected.id].source].label + "," + s.graph.nodes()[s.graph.edges()[selected.id].target].label + ")";
+					var newString = "Kante: (" + s.graph.nodes()[selected.source].label + "," + s.graph.nodes()[selected.target].label + ")";
 					// set text of contextmenu
 					document.getElementById('anzeigeKante').innerHTML = newString;
 					//set visibility and position of contexmenu
@@ -642,7 +679,6 @@
 				}
 
 			document.addEventListener('DOMContentLoaded', function () {
-				var first = true;
 				s.bind('rightClickNode', function (e) {
 
 					selected = e.data.node;
@@ -662,10 +698,9 @@
 					var xpos = e.data.captor.clientX;
 					var ypos = e.data.captor.clientY;
 					// make checkboxes for source and sink property of a node customizable
-					console.log("CLICKED");
 					document.getElementById('update2').addEventListener('click', updateByCheckbox, {once:true});
 					hideContextMenu();
-					var newString = "Knoten: " + s.graph.nodes()[selected.id].label;
+					var newString = "Knoten: " + selected.label;
 					// set text of contextmenu
 					document.getElementById('anzeigeKnoten').innerHTML = newString;
 					// set visibility and position of contextmenu
@@ -688,7 +723,6 @@
 				hideContextMenu();
 				hideContextMenuNodes();
 				document.getElementById('update2').removeEventListener('click', updateByCheckbox);
-				console.log("UNBIND");
 			});
 			
 			// Listener for ESC-button
