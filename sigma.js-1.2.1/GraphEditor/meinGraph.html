@@ -231,6 +231,7 @@
 				dom,
 				c,
 				position,
+				moved,
 				edgeMode = false,
 				nodeMode = false,
 				nodeDelMode = false,
@@ -389,36 +390,37 @@
 				if (nodeMode) {
 					document.getElementById('textfeld').style.visibility = "visible";
 					document.getElementById('textfeld').innerHTML = "Knoten hinzufügen:";
-					s.bind('click', function(e) {		
-						
-						nodeinit = {
-							id: (id = (++nId) + ''),
-							type: 'n',
-							label: nodeLabels[(nId - sCount - tCount) %24],
-							color: '#500',
-							size: nodeRadius,
-							x: (event.pageX - lef)/wid,
-							y: (event.pageY -top)/hei,
-							//console.log(document.getElementById("graph-container").getBoundingClientRect());
-							dX: 0,
-							dY: 0
-							//type: 'goo'
-						};
-						if(document.getElementById("s-checkbox").checked) {
-							nodeinit.type = 's';
-							nodeinit.color = '#108DC3';
-							sCount += 1;
-							nodeinit.label = 's' + sCount;
-						} else if(document.getElementById("t-checkbox").checked) {
-							nodeinit.type = 't';
-							tCount += 1;
-							nodeinit.color = tColors[(tCount -1) % tColors.length];
-							nodeinit.label = 't' + tCount;
-						} else if(nId - sCount -tCount > 23){
-							nodeinit.label += Math.floor((nId - sCount - tCount) /24);
+					s.bind('click', function(e) {	
+						if(!moved) {
+							nodeinit = {
+								id: (id = (++nId) + ''),
+								type: 'n',
+								label: nodeLabels[(nId - sCount - tCount) %24],
+								color: '#500',
+								size: nodeRadius,
+								x: (event.pageX - lef)/wid,
+								y: (event.pageY -top)/hei,
+								//console.log(document.getElementById("graph-container").getBoundingClientRect());
+								dX: 0,
+								dY: 0
+								//type: 'goo'
+							};
+							if(document.getElementById("s-checkbox").checked) {
+								nodeinit.type = 's';
+								nodeinit.color = '#108DC3';
+								sCount += 1;
+								nodeinit.label = 's' + sCount;
+							} else if(document.getElementById("t-checkbox").checked) {
+								nodeinit.type = 't';
+								tCount += 1;
+								nodeinit.color = tColors[(tCount -1) % tColors.length];
+								nodeinit.label = 't' + tCount;
+							} else if(nId - sCount -tCount > 23){
+								nodeinit.label += Math.floor((nId - sCount - tCount) /24);
+							}
+							s.graph.addNode(nodeinit);
+							s.refresh();
 						}
-						s.graph.addNode(nodeinit);
-						s.refresh();
 					});
 				} else {
 					document.getElementById('textfeld').style.visibility = "hidden";
@@ -609,6 +611,7 @@
 				eId = -1;
 				sCount = 1;
 				tCount = 1;
+				edgeCount = 0;
 				// remove all nodes and edges from graph
 				s.graph.clear();
 				s.graph.read({
@@ -786,12 +789,20 @@
 					hideContextMenuNodes();
 				}
 			}; 
+			
+			dom.addEventListener('mousedown', function(e) {
+				moved = false;
+			});
+			
+			dom.addEventListener('mousemove', function(e) {
+				moved = true;
+			});
 
 			  
 			// Initialize the dragNodes plugin:
 			var dragListener = sigma.plugins.dragNodes(s, s.renderers[0]);
 
-			dragListener.bind('startdrag', function(event) {
+			dragListener.bind('startdrag', function(event) {	
 				console.log(event);
 			});
 			dragListener.bind('drag', function(event) {
