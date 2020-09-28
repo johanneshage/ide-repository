@@ -26,6 +26,6 @@ done 23.) kante entfernen Button?
 25.) labels paralleler Kanten werden übereinander geschrieben
 done 26.) ESC taste soll alle Modi abbrechen
 done 27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbeitet und anschließend ein weitere rechtsgeklickt, so werden beide Knoten geupdatet!!!
-28.) reset button
+done 28.) reset button
 done 29.) Rechtsklick auf knoten ohne update führt zu falscher setzung der checkboxen beim Rechtsklicken des nächsten Knotens
 done 30.) Rechtsklick auf Kante -> Kapazität und Reisezeit standardmäßig auf 1, nicht auf richtigem Wert

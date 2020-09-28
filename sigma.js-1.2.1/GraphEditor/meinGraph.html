@@ -147,7 +147,7 @@
 				<p id="textfeld"> wähle zu entfernenden Knoten </p>
 			</div>
 			<div class="right_area">
-				<a href="#" class="reset_btn">Reset</a>
+				<a href="#" class="reset_btn" id="buttonReset">Reset</a>
 			</div>
 		</header>
 		<!--header area end-->
@@ -602,6 +602,43 @@
 					s.unbind('clickEdge');
 				};	
 			}, false);
+			
+			var button_reset = document.getElementById('buttonReset');
+			button_reset.addEventListener('click', function(e) {
+				nId = 0;
+				eId = 0;
+				// remove all nodes and edges from graph
+				s.graph.clear();
+				s.graph.read({
+					nodes: [
+						{
+							id: (++nId) + '',
+							type: 's',
+							label: 's1',
+							size: nodeRadius,
+							x: Math.random(),
+							y: Math.random(),
+							dX: 0,
+							dY: 0,
+							//type: 'goo', //??? was ist das
+							color: '#108DC3'
+						},
+						{
+							id: (++nId) + '',
+							type: 't',
+							label: 't1',
+							size: nodeRadius,
+							x: Math.random(),
+							y: Math.random(),
+							dX: 0,
+							dY: 0,
+							//type: 'goo',
+							color: tColors[0]
+					}]
+				});
+				unbindAll();
+				s.refresh();
+			},false);
 
 			//https://wiki.selfhtml.org/wiki/JavaScript/Tutorials/Kontextmen%C3%BC
 			// use own contexmenu
@@ -728,19 +765,23 @@
 				document.getElementById('update2').removeEventListener('click', updateByCheckbox);
 			});
 			
+			function unbindAll () {
+				s.unbind('click');
+				s.unbind('clickNode');
+				s.unbind('clickEdge');
+				edgeMode = false;
+				nodeMode = false;
+				nodeDelMode = false;
+				edgeDelMode = false;
+				document.getElementById('textfeld').style.visibility = "hidden";
+			}
+			
 			// Listener for ESC-button
 			window.onkeyup = function(e) {
 				if ( e.keyCode === 27 ) {	
-					s.unbind('click');
-					s.unbind('clickNode');
-					s.unbind('clickEdge');
-					edgeMode = false;
-					nodeMode = false;
-					nodeDelMode = false;
-					edgeDelMode = false;
+					unbindAll();
 					hideContextMenu();
 					hideContextMenuNodes();
-					document.getElementById('textfeld').style.visibility = "hidden"; 
 				}
 			}; 
 
