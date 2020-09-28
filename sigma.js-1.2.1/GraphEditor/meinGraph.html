@@ -605,8 +605,10 @@
 			
 			var button_reset = document.getElementById('buttonReset');
 			button_reset.addEventListener('click', function(e) {
-				nId = 0;
-				eId = 0;
+				nId = -1;
+				eId = -1;
+				sCount = 1;
+				tCount = 1;
 				// remove all nodes and edges from graph
 				s.graph.clear();
 				s.graph.read({
