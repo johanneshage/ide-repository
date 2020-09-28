@@ -8,7 +8,7 @@ done - setzen der Knotenkoordinaten auf einen kleineren Bereich hat dieses Verha
 done 8.) parallele Kanten automatisch curved, nebeneinander. Momentan zufällig aus gerade und curved siehe parallel-edges.html
 done? - werden wegen 6.) jetzt auch meistens angezeigt 9.) Knotenlabels immer anzeigen oder nur bei hover?
 done durch zusätzlichen import aus edge-renderers.html übernomen 10.) kantenlabels position bei kante curved?
-11.) Leerzeile nahc anzeigeKante ?
+done - veraltet 11.) Leerzeile nahc anzeigeKante ?
 done 12.) Knotenlabels ab 25. Knoten mehrfach?
 done WICHTIG: erstmal graph in python einlesen testen
 done - Quellvideo: https://www.youtube.com/watch?v=M-pil5oHw0w, evtl. Quelle expaning menu: https://www.youtube.com/watch?v=rgUp302f_lY 13.) Gesamtes Layout verschönern
@@ -24,7 +24,7 @@ done 22.) Knoten hinzufügen lässt sich nicht mehr ausschalten?
 done 23.) kante entfernen Button?
 24.) edgeCount wird bei Entfernen von Kante durch entfernen von Knoten nicht aktualisiert - kann eventuell ignoriert werden, nur einfluss auf Kantenkrümmung??
 25.) labels paralleler Kanten werden übereinander geschrieben
-26.) ESC taste soll alle Modi abbrechen
+done 26.) ESC taste soll alle Modi abbrechen
 done 27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbeitet und anschließend ein weitere rechtsgeklickt, so werden beide Knoten geupdatet!!!
 28.) reset button
 29.) Rechtsklick auf knoten ohne update führt zu falscher setzung der checkboxen beim Rechtsklicken des nächsten Knotens

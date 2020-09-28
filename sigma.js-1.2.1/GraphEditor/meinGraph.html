@@ -231,7 +231,6 @@
 				dom,
 				c,
 				position,
-				spaceMode = false,
 				edgeMode = false,
 				nodeMode = false,
 				nodeDelMode = false,
@@ -727,9 +726,17 @@
 			
 			// Listener for ESC-button
 			window.onkeyup = function(e) {
-				if ( e.keyCode === 27 ) {
+				if ( e.keyCode === 27 ) {	
+					s.unbind('click');
+					s.unbind('clickNode');
+					s.unbind('clickEdge');
+					edgeMode = false;
+					nodeMode = false;
+					nodeDelMode = false;
+					edgeDelMode = false;
 					hideContextMenu();
 					hideContextMenuNodes();
+					document.getElementById('textfeld').style.visibility = "hidden"; 
 				}
 			}; 
 
