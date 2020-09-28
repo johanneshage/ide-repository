@@ -689,6 +689,9 @@
 					} else if (selected.type == 't') {
 						document.getElementById("context-t-checkbox").checked = true;
 						document.getElementById("context-s-checkbox").checked = false;
+					} else {
+						document.getElementById("context-s-checkbox").checked = false;
+						document.getElementById("context-t-checkbox").checked = false;
 					}
 					
 					// select div "contextNodes"
@@ -702,6 +705,7 @@
 					var newString = "Knoten: " + selected.label;
 					// set text of contextmenu
 					document.getElementById('anzeigeKnoten').innerHTML = newString;
+					document.getElementById('nam').value = selected.label;
 					// set visibility and position of contextmenu
 					contextSelector.setAttribute('style', 'display:block; left:' + xpos + 'px; top:' + ypos + 'px');	
 				});
