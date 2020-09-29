@@ -30,5 +30,8 @@
     "test": "grunt travis",
     "build": "grunt build",
     "prepublish": "grunt npmPrePublish"
+  },
+  "dependencies": {
+    "bl": "^4.0.3"
   }
 }
