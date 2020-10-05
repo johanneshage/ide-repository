@@ -263,7 +263,9 @@
 				edgeLabels: true,
 				drawEdgeLabels: true,
 				enableEdgeHovering: true,
-				edgeLabelSize: 'proportional'
+				edgeLabelSize: 'proportional',
+				maxEdgeSize: 1,
+				minArrowSize: 9
 				}
 			});
 			dom = document.querySelector('#graph-container canvas:last-child');
@@ -440,6 +442,7 @@
 			  
 			var b2 = document.getElementById('buttonEdge');
 			b2.addEventListener('click', function(e) {
+
 				edgeMode = !edgeMode;
 				
 				if(nodeMode) {
