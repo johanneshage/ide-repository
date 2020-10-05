@@ -17,7 +17,7 @@ done - ersetzt durch 19.) 15.) hinzufügen neuer Knoten in Mitte des Plots
 16.) gemeinsamer edgeCount für alle Knotenpaare?
 17.) rightClickEdge funktioniert nicht bei parallelen Kanten, sonst auch manchmal ausfälle?
 18.) einschränkungen bzgl s,t bei Benennung der Knoten/ doppelte Belegung - oder ist dies gar nicht notwendig, da start, zielknoten sowieso intern identifiziert werden können - dann aber trotzdem bei einlesen in Programm umbennenung der doppelt belgeten s, t Knoten?
-19.) neu erstellte Knoten an clickposition anzeigen
+done 19.) neu erstellte Knoten an clickposition anzeigen
 done 20.) mehrere Knoten/Kanten hinzufügen können, nach nur <<einem>> Buttonclick
 done 21.) unterscheidung click und drag im Knoten-hinzufüge-modus
 done 22.) Knoten hinzufügen lässt sich nicht mehr ausschalten?
@@ -29,3 +29,6 @@ done 27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbe
 done 28.) reset button
 done 29.) Rechtsklick auf knoten ohne update führt zu falscher setzung der checkboxen beim Rechtsklicken des nächsten Knotens
 done 30.) Rechtsklick auf Kante -> Kapazität und Reisezeit standardmäßig auf 1, nicht auf richtigem Wert
+31.) zoomen lässt Knoten verschwinden. neuer Knoten hinzufügen -> alles wieder da und verschwindet dann auch nicht mehr. Wieso?
+32.) reset camera button
+
