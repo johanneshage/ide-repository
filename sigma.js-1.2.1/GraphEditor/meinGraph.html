@@ -147,7 +147,8 @@
 				<p id="textfeld"> wähle zu entfernenden Knoten </p>
 			</div>
 			<div class="right_area">
-				<a href="#" class="reset_btn" id="buttonReset">Reset</a>
+				<a href="#" class="reset_btn" id="buttonReset">Reset Graph</a>
+				<a href="#" class="reset_cam" id="buttonResetCam">Reset Camera Angle</a>
 			</div>
 		</header>
 		<!--header area end-->
@@ -617,8 +618,8 @@
 							type: 's',
 							label: 's1',
 							size: nodeRadius,
-							x: Math.random(),
-							y: Math.random(),
+							x: 0,
+							y: 0,
 							dX: 0,
 							dY: 0,
 							//type: 'goo', //??? was ist das
@@ -629,8 +630,8 @@
 							type: 't',
 							label: 't1',
 							size: nodeRadius,
-							x: Math.random(),
-							y: Math.random(),
+							x: 1,
+							y: 0,
 							dX: 0,
 							dY: 0,
 							//type: 'goo',
@@ -640,6 +641,12 @@
 				unbindAll();
 				s.refresh();
 			},false);
+			
+			var button_reset_cam = document.getElementById('buttonResetCam');
+			button_reset_cam.addEventListener('click', function(e) {
+				c.angle = 0;
+				s.refresh();
+			});
 
 			//https://wiki.selfhtml.org/wiki/JavaScript/Tutorials/Kontextmen%C3%BC
 			// use own contexmenu

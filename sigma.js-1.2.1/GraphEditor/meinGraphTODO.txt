@@ -30,5 +30,4 @@ done 28.) reset button
 done 29.) Rechtsklick auf knoten ohne update führt zu falscher setzung der checkboxen beim Rechtsklicken des nächsten Knotens
 done 30.) Rechtsklick auf Kante -> Kapazität und Reisezeit standardmäßig auf 1, nicht auf richtigem Wert
 31.) zoomen lässt Knoten verschwinden. neuer Knoten hinzufügen -> alles wieder da und verschwindet dann auch nicht mehr. Wieso?
-32.) reset camera button
-
+done 32.) reset camera button

@@ -52,6 +52,25 @@ header{
   background: #0B87A6;
 }
 
+.reset_cam{
+  padding: 5px;
+  background: #19B3D3;
+  text-decoration: none;
+  float: right;
+  margin-top: -10px;
+  margin-right: 20px;
+  border-radius: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  transition: 0.5s;
+  transition-property: background;
+}
+
+.reset_cam:hover{
+  background: #0B87A6;
+}
+
 .sidebar {
   background: #2f323a;
   margin-top: 70px;
