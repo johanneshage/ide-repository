@@ -35,7 +35,7 @@ header{
 
 .reset_btn{
   padding: 5px;
-  background: #19B3D3;
+  background: #B43104;
   text-decoration: none;
   float: right;
   margin-top: -10px;
@@ -43,7 +43,7 @@ header{
   border-radius: 2px;
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: #fff	;
   transition: 0.5s;
   transition-property: background;
 }

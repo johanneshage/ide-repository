@@ -259,13 +259,13 @@
 					type: 'canvas'
 				},
 				settings: {
-				enableHovering: false,
-				edgeLabels: true,
-				drawEdgeLabels: true,
-				enableEdgeHovering: true,
-				edgeLabelSize: 'proportional',
-				maxEdgeSize: 1,
-				minArrowSize: 9
+					enableHovering: false,
+					drawEdgeLabels: true,
+					enableEdgeHovering: true,
+					maxEdgeSize: 1,
+					minArrowSize: 8,
+					defaultEdgeLabelSize: 14,
+					labelThreshold: 5.5
 				}
 			});
 			dom = document.querySelector('#graph-container canvas:last-child');
@@ -663,14 +663,17 @@
 					// save click position
 					var xpos = e.data.captor.clientX;
 					var ypos = e.data.captor.clientY;
-					
 					// save capacity and traveltime of selected edge
 					document.getElementById('kap').value = selected.properties.capacity;
 					document.getElementById('len').value = selected.properties.traveltime;
 					
 					document.getElementById('update').addEventListener('click', function(e) {
+						
 						var kap = document.getElementById('kap').value;
 						var len = document.getElementById('len').value;
+						
+						selected.properties.capacity = kap;
+						selected.properties.traveltime = len;
 						s.graph.edges()[selected.id].label = kap + "/" + len;
 						s.refresh();
 						hideContextMenu();
