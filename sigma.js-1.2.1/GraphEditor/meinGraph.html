@@ -67,11 +67,11 @@
 		<script src="../plugins/sigma.renderers.edgeLabels/sigma.canvas.edges.labels.curve.js"></script>
 		<script src="../plugins/sigma.renderers.edgeLabels/sigma.canvas.edges.labels.curvedArrow.js"></script>
 		<!-- Imports for plugin "parallelEdges" to support parallel edges, makes edgeattribute "count" needed -->
-		<script src="../plugins/sigma.renderers.parallelEdges/utils.js"></script>
-		<script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edges.curve.js"></script>
-		<script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edges.curvedArrow.js"></script>
-		<script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edgehovers.curve.js"></script>
-		<script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edgehovers.curvedArrow.js"></script>
+		<!-- <script src="../plugins/sigma.renderers.parallelEdges/utils.js"></script> -->
+		<!-- <script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edges.curve.js"></script> -->
+		<!-- <script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edges.curvedArrow.js"></script> -->
+		<!-- <script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edgehovers.curve.js"></script> -->
+		<!-- <script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edgehovers.curvedArrow.js"></script> -->
 		<!-- Use plugin "sigma.exportes.gexf.js" to export graph to gexf file -->
 		<script src="../plugins/sigma.exporters.gexf/sigma.exporters.gexf.js"></script>
 		
@@ -265,7 +265,8 @@
 					maxEdgeSize: 1,
 					minArrowSize: 8,
 					defaultEdgeLabelSize: 14,
-					labelThreshold: 5.5
+					labelThreshold: 5.5,
+					edgeLabelThreshold: 0.75
 				}
 			});
 			dom = document.querySelector('#graph-container canvas:last-child');

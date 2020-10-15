@@ -14,21 +14,22 @@ done WICHTIG: erstmal graph in python einlesen testen
 done - Quellvideo: https://www.youtube.com/watch?v=M-pil5oHw0w, evtl. Quelle expaning menu: https://www.youtube.com/watch?v=rgUp302f_lY 13.) Gesamtes Layout verschönern
 done - stimmt, wird nicht benötigt 14.) edgeValues wird nicht mehr benötigt?
 done - ersetzt durch 19.) 15.) hinzufügen neuer Knoten in Mitte des Plots
-16.) gemeinsamer edgeCount für alle Knotenpaare?
-17.) rightClickEdge funktioniert nicht bei parallelen Kanten, sonst auch manchmal ausfälle?
+done - jetzt punkt 34.), 16.) gemeinsamer edgeCount für alle Knotenpaare?
+done 17.) rightClickEdge funktioniert nicht bei parallelen Kanten, sonst auch manchmal ausfälle?
 18.) einschränkungen bzgl s,t bei Benennung der Knoten/ doppelte Belegung - oder ist dies gar nicht notwendig, da start, zielknoten sowieso intern identifiziert werden können - dann aber trotzdem bei einlesen in Programm umbennenung der doppelt belgeten s, t Knoten?
 done 19.) neu erstellte Knoten an clickposition anzeigen
 done 20.) mehrere Knoten/Kanten hinzufügen können, nach nur <<einem>> Buttonclick
 done 21.) unterscheidung click und drag im Knoten-hinzufüge-modus
 done 22.) Knoten hinzufügen lässt sich nicht mehr ausschalten?
 done 23.) kante entfernen Button?
-24.) edgeCount wird bei Entfernen von Kante durch entfernen von Knoten nicht aktualisiert - kann eventuell ignoriert werden, nur einfluss auf Kantenkrümmung??
-25.) labels paralleler Kanten werden übereinander geschrieben -> positionierung labels?
+done - jetzt punkt 34.), 24.) edgeCount wird bei Entfernen von Kante durch entfernen von Knoten nicht aktualisiert - kann eventuell ignoriert werden, nur einfluss auf Kantenkrümmung??
+done - jetzt punkt 34.), 25.) labels paralleler Kanten werden übereinander geschrieben -> positionierung labels?
 done 26.) ESC taste soll alle Modi abbrechen
 done 27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbeitet und anschließend ein weitere rechtsgeklickt, so werden beide Knoten geupdatet!!!
 done 28.) reset button
 done 29.) Rechtsklick auf knoten ohne update führt zu falscher setzung der checkboxen beim Rechtsklicken des nächsten Knotens
 done 30.) Rechtsklick auf Kante -> Kapazität und Reisezeit standardmäßig auf 1, nicht auf richtigem Wert
-31.) zoomen lässt Knoten verschwinden. neuer Knoten hinzufügen -> alles wieder da und verschwindet dann auch nicht mehr. Wieso?
+31.) zoomen lässt Knoten verschwinden (nur bei zoom via touch). neuer Knoten hinzufügen -> alles wieder da und verschwindet dann auch nicht mehr. Wieso?
 done 32.) reset camera button
 33.) kantenkrümmung bearbeiten
+34.) parallele Kanten
