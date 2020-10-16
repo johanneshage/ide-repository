@@ -29,7 +29,8 @@ done 27.) FEHLER BEI RIGHTCLICKNODE (Kontextmenü), wird ein Konten nicht bearbe
 done 28.) reset button
 done 29.) Rechtsklick auf knoten ohne update führt zu falscher setzung der checkboxen beim Rechtsklicken des nächsten Knotens
 done 30.) Rechtsklick auf Kante -> Kapazität und Reisezeit standardmäßig auf 1, nicht auf richtigem Wert
-31.) zoomen lässt Knoten verschwinden (nur bei zoom via touch). neuer Knoten hinzufügen -> alles wieder da und verschwindet dann auch nicht mehr. Wieso?
+31.) zoomen lässt Knoten verschwinden (nur bei zoom via touch -> vielleicht kommt das also vom drehen, nicht vom zoomen?). neuer Knoten hinzufügen -> alles wieder da und verschwindet dann auch nicht mehr. Wieso?
 done 32.) reset camera button
 33.) kantenkrümmung bearbeiten
-34.) parallele Kanten
+done 34.) parallele Kanten
+35.) bei parallelen Kanten kann nur die jeweils erste Kante angeklickt werden

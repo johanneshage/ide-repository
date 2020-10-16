@@ -2,7 +2,7 @@
 <html lang="de" dir="ltr">
 	<head>
 		<meta charset="utf-8">
-		<title>Sidebar Dashboard Template</title>
+		<title>Graph Editor</title>
 		<link rel="stylesheet" href="sidebar.css">
 		<!-- <link rel="stylesheet" href="00contextmenu.css"> -->
 		<link href="contextmenu.css" rel="stylesheet" type="text/css"> 
@@ -34,9 +34,9 @@
 		<script src="../src/renderers/canvas/sigma.canvas.hovers.def.js"></script>
 		<script src="../src/renderers/canvas/sigma.canvas.nodes.def.js"></script>
 		<script src="../src/renderers/canvas/sigma.canvas.edges.def.js"></script>
-		<script src="../src/renderers/canvas/sigma.canvas.edges.curve.js"></script>
-		<script src="../src/renderers/canvas/sigma.canvas.edges.arrow.js"></script>
-		<script src="../src/renderers/canvas/sigma.canvas.edges.curvedArrow.js"></script>
+		<!-- <script src="../src/renderers/canvas/sigma.canvas.edges.curve.js"></script> -->
+		<!-- <script src="../src/renderers/canvas/sigma.canvas.edges.arrow.js"></script> -->
+		<!-- <script src="../src/renderers/canvas/sigma.canvas.edges.curvedArrow.js"></script> -->
 		<script src="../src/renderers/canvas/sigma.canvas.edgehovers.def.js"></script>
 		<script src="../src/renderers/canvas/sigma.canvas.edgehovers.curve.js"></script>
 		<script src="../src/renderers/canvas/sigma.canvas.edgehovers.arrow.js"></script>
@@ -67,11 +67,11 @@
 		<script src="../plugins/sigma.renderers.edgeLabels/sigma.canvas.edges.labels.curve.js"></script>
 		<script src="../plugins/sigma.renderers.edgeLabels/sigma.canvas.edges.labels.curvedArrow.js"></script>
 		<!-- Imports for plugin "parallelEdges" to support parallel edges, makes edgeattribute "count" needed -->
-		<!-- <script src="../plugins/sigma.renderers.parallelEdges/utils.js"></script> -->
-		<!-- <script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edges.curve.js"></script> -->
-		<!-- <script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edges.curvedArrow.js"></script> -->
-		<!-- <script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edgehovers.curve.js"></script> -->
-		<!-- <script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edgehovers.curvedArrow.js"></script> -->
+		<script src="../plugins/sigma.renderers.parallelEdges/utils.js"></script>
+		<script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edges.curve.js"></script>
+		<script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edges.curvedArrow.js"></script>
+		<script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edgehovers.curve.js"></script>
+		<script src="../plugins/sigma.renderers.parallelEdges/sigma.canvas.edgehovers.curvedArrow.js"></script>
 		<!-- Use plugin "sigma.exportes.gexf.js" to export graph to gexf file -->
 		<script src="../plugins/sigma.exporters.gexf/sigma.exporters.gexf.js"></script>
 		
@@ -285,7 +285,9 @@
 						dX: 0,
 						dY: 0,
 						//type: 'goo', //??? was ist das
-						color: '#108DC3'
+						color: '#108DC3',
+						properties: { out_neighbors: [],
+										edge_counts: [] }
 					},
 					{
 						id: (++nId) + '',
@@ -297,7 +299,9 @@
 						dX: 0,
 						dY: 0,
 						//type: 'goo',
-						color: tColors[0]
+						color: tColors[0],
+						properties: { out_neighbors: [],
+										edge_counts: [] }
 				}]
 			});
 			var graph_string = JSON.stringify(s.graph);
@@ -413,7 +417,9 @@
 								// use y-position of 's1' as y-origin: 'sy' - ('originSY' - 70)/'conversion', where 70 is the height of the topbar
 								y: (event.pageY - originSY - 70)/conversion + sy,
 								dX: 0,
-								dY: 0
+								dY: 0,
+								properties: { out_neighbors: [],
+												edge_counts: [] }
 								//type: 'goo'
 							};
 							// check if new node is source node
@@ -472,9 +478,17 @@
 				function chooseTarget(src) {
 					var tar = '';
 					s.bind('clickNode', function(e) {
-						edgeCount += 1;
 						document.getElementById('textfeld').style.visibility = "hidden";
 						tar = e.data.node.id;
+						// check if this is the first edge from 'src' to 'sink'
+						if(s.graph.nodes()[src].properties.out_neighbors.indexOf(tar) == -1) {
+							// in this case, the node 'tar' is added to the 'out_neighbors' of 'src', and the respective 'edge_counts'-element is set to 1
+							s.graph.nodes()[src].properties.out_neighbors.push(tar);
+							s.graph.nodes()[src].properties.edge_counts.push(1);
+						} else {
+							// if there are multiple parallel edges, the respective 'edge_counts'-element is increased by 1
+							s.graph.nodes()[src].properties.edge_counts[s.graph.nodes()[src].properties.out_neighbors.indexOf(tar)] += 1;
+						}
 						s.graph.addEdge({
 							id: (++eId) + '',
 							source: src,
@@ -484,7 +498,7 @@
 							type: 'curvedArrow',
 							size: 1,
 							label: document.getElementById("inputKapIn").value + "/" + document.getElementById("inputLenIn").value,
-							count: edgeCount,
+							count: 8 * (s.graph.nodes()[src].properties.edge_counts[s.graph.nodes()[src].properties.out_neighbors.indexOf(tar)] -1),
 							properties: {
 								capacity: document.getElementById("inputKapIn").value,
 								traveltime: document.getElementById("inputLenIn").value
@@ -544,6 +558,17 @@
 							} else if(e.data.node.type == "t") {
 								tCount -= 1;
 							}
+							// update all 'out_neighbors' and 'edge_counts' values
+							for(f in s.graph.edges()) {
+								if(s.graph.edges()[f].target == e.data.node) {
+									// index of f's target node in the 'out_neighbors' - list of its source node
+									var tar_index = s.graph.nodes()[s.graph.edges()[f].source].properties.out_neighbors.indexOf(s.graph.edges()[f].target);
+									
+									// delete redundant values (target will be deleted)
+									s.graph.nodes()[s.graph.edges()[f].source].properties.edge_counts.splice(tar_index , 1);
+									s.graph.nodes()[s.graph.edges()[f].source].properties.out_neighbors.splice(tar_index, 1);
+								}
+							}
 							s.graph.dropNode(e.data.node.id);
 							s.refresh();
 						} else {
@@ -553,7 +578,7 @@
 				} else {
 					document.getElementById('textfeld').style.visibility = "hidden";
 					s.unbind('clickNode');
-				};	
+				}	
 			}, false);
 			  
 			var b4 = document.getElementById('loadData');
@@ -594,16 +619,35 @@
 					
 				if(edgeDelMode) {
 					document.getElementById('textfeld').style.visibility = "visible";
-					document.getElementById('textfeld').innerHTML = "wähle zu entfernende Kante"
+					document.getElementById('textfeld').innerHTML = "wähle zu entfernende Kante";
 					s.bind('clickEdge', function(e) {
-						edgeCount -= 1;
+						// index of the edges target node in the 'out_neighbors' - list of its source node
+						var tar_index = s.graph.nodes()[e.data.edge.source].properties.out_neighbors.indexOf(e.data.edge.target);
+						var remove = true;
+						
+						// remove edge from graph
 						s.graph.dropEdge(e.data.edge.id);
+						
+						// check if there is a parallel edge
+						for(f in s.graph.edges()) {
+							if(s.graph.edges()[f].target == e.data.edge.target && s.graph.edges()[f].source == e.data.edge.source) {
+								remove = false;
+								break;
+							}
+						}
+						
+						// if there is no parallel edge, the properties 'edge_counts' and 'out_neighbors' of the source node have to be updated
+						if(remove) {
+							s.graph.nodes()[e.data.edge.source].properties.edge_counts.splice(tar_index , 1);
+							s.graph.nodes()[e.data.edge.source].properties.out_neighbors.splice(tar_index, 1);
+						}
+						
 						s.refresh();
 					});
 				} else {
 					document.getElementById('textfeld').style.visibility = "hidden";
 					s.unbind('clickEdge');
-				};	
+				}
 			}, false);
 			
 			var button_reset = document.getElementById('buttonReset');
