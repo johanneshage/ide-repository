@@ -235,7 +235,6 @@
 				edgeDelMode = false,
 				nId = -1,
 				eId = -1,
-				edgeCount = 0,
 				radius = 50,
 				nodeRadius = 0.5,
 				wheelRatio = 1.1,
@@ -261,6 +260,7 @@
 				settings: {
 					enableHovering: false,
 					drawEdgeLabels: true,
+					singleHover: true,
 					enableEdgeHovering: true,
 					maxEdgeSize: 1,
 					minArrowSize: 8,
@@ -656,7 +656,6 @@
 				eId = -1;
 				sCount = 1;
 				tCount = 1;
-				edgeCount = 0;
 				// remove all nodes and edges from graph
 				s.graph.clear();
 				s.graph.read({

@@ -33,4 +33,5 @@ done 30.) Rechtsklick auf Kante -> Kapazität und Reisezeit standardmäßig auf 
 done 32.) reset camera button
 33.) kantenkrümmung bearbeiten
 done 34.) parallele Kanten
-35.) bei parallelen Kanten kann nur die jeweils erste Kante angeklickt werden
+done 35.) bei parallelen Kanten kann nur die jeweils erste Kante angeklickt werden
+36.) bei parallelen Kanten funktioniert in (wenigen) Fällen das edge hovering nicht über die gesamte Kante
