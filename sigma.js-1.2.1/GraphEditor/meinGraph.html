@@ -35,7 +35,7 @@
 		<script src="../src/renderers/canvas/sigma.canvas.nodes.def.js"></script>
 		<script src="../src/renderers/canvas/sigma.canvas.edges.def.js"></script>
 		<!-- <script src="../src/renderers/canvas/sigma.canvas.edges.curve.js"></script> -->
-		<!-- <script src="../src/renderers/canvas/sigma.canvas.edges.arrow.js"></script> -->
+		<script src="../src/renderers/canvas/sigma.canvas.edges.arrow.js"></script>
 		<!-- <script src="../src/renderers/canvas/sigma.canvas.edges.curvedArrow.js"></script> -->
 		<script src="../src/renderers/canvas/sigma.canvas.edgehovers.def.js"></script>
 		<script src="../src/renderers/canvas/sigma.canvas.edgehovers.curve.js"></script>
@@ -485,25 +485,49 @@
 							// in this case, the node 'tar' is added to the 'out_neighbors' of 'src', and the respective 'edge_counts'-element is set to 1
 							s.graph.nodes()[src].properties.out_neighbors.push(tar);
 							s.graph.nodes()[src].properties.edge_counts.push(1);
+							if(s.graph.nodes()[tar].properties.out_neighbors.indexOf(src) == -1) {
+								// no parallel edges, the edge is drawn straight
+								first = true;
+							} else {
+								// no parallel edges, but the same edge with reversed orientation existst, so the edge is drawn curved
+								first = false;
+							}
 						} else {
 							// if there are multiple parallel edges, the respective 'edge_counts'-element is increased by 1
 							s.graph.nodes()[src].properties.edge_counts[s.graph.nodes()[src].properties.out_neighbors.indexOf(tar)] += 1;
+							// in this case, the edge is drawn curved, which is determined by the variable 'first'
+							first = false;
 						}
-						s.graph.addEdge({
-							id: (++eId) + '',
-							source: src,
-							target: tar,
-							color: '#000000',
-							//type: ['arrow', 'curvedArrow'][1.5 | 0],//[Math.random() * 2  | 0],
-							type: 'curvedArrow',
-							size: 1,
-							label: document.getElementById("inputKapIn").value + "/" + document.getElementById("inputLenIn").value,
-							count: 8 * (s.graph.nodes()[src].properties.edge_counts[s.graph.nodes()[src].properties.out_neighbors.indexOf(tar)] -1),
-							properties: {
-								capacity: document.getElementById("inputKapIn").value,
-								traveltime: document.getElementById("inputLenIn").value
-							}
-						});
+						if(first) { 	// first edge
+							s.graph.addEdge({
+								id: (++eId) + '',
+								source: src,
+								target: tar,
+								color: '#000000',
+								type: "arrow",
+								size: 1,
+								label: document.getElementById("inputKapIn").value + "/" + document.getElementById("inputLenIn").value,
+								properties: {
+									capacity: document.getElementById("inputKapIn").value,
+									traveltime: document.getElementById("inputLenIn").value
+								}
+							});
+						} else { 	// parallel edge
+							s.graph.addEdge({
+								id: (++eId) + '',
+								source: src,
+								target: tar,
+								color: '#000000',
+								type: 'curvedArrow',
+								size: 1,
+								label: document.getElementById("inputKapIn").value + "/" + document.getElementById("inputLenIn").value,
+								count: 8 * (s.graph.nodes()[src].properties.edge_counts[s.graph.nodes()[src].properties.out_neighbors.indexOf(tar)] -1),
+								properties: {
+									capacity: document.getElementById("inputKapIn").value,
+									traveltime: document.getElementById("inputLenIn").value
+								}
+							});
+						}
 						s.unbind('clickNode');
 						s.refresh();
 						chooseStart();
