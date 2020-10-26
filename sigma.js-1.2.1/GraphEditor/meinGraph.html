@@ -480,7 +480,7 @@
 					s.bind('clickNode', function(e) {
 						document.getElementById('textfeld').style.visibility = "hidden";
 						tar = e.data.node.id;
-						// check if this is the first edge from 'src' to 'sink'
+						// check if this is the first edge from 'src' to 'tar'
 						if(s.graph.nodes()[src].properties.out_neighbors.indexOf(tar) == -1) {
 							// in this case, the node 'tar' is added to the 'out_neighbors' of 'src', and the respective 'edge_counts'-element is set to 1
 							s.graph.nodes()[src].properties.out_neighbors.push(tar);
@@ -590,7 +590,7 @@
 					edgeAttributes: 'properties',
 					renderer: s.renderers[0],
 					creator: 'Sigma.js',
-					description: 'This is an awesome graph!'
+					edgeType: 'directed'
 				});
 			}, false);
 			  
@@ -695,12 +695,27 @@
 				s.refresh();
 			});
 
+			var selected;
+
 			//https://wiki.selfhtml.org/wiki/JavaScript/Tutorials/Kontextmen%C3%BC
 			// use own contexmenu
+			function updateByTextfield () {
+						
+				var kap = document.getElementById('kap').value;
+				var len = document.getElementById('len').value;
+				
+				selected.properties.capacity = kap;
+				selected.properties.traveltime = len;
+				s.graph.edges()[selected.id].label = kap + "/" + len;
+				
+				s.refresh();
+				hideContextMenu();
+			}
+			
 			document.addEventListener('DOMContentLoaded', function () {
 				s.bind('rightClickEdge', function (e) {
 
-					var selected = e.data.edge;
+					selected = e.data.edge;
 					
 					// select div "context"
 					var contextSelector = document.querySelector('#context');
@@ -711,17 +726,7 @@
 					document.getElementById('kap').value = selected.properties.capacity;
 					document.getElementById('len').value = selected.properties.traveltime;
 					
-					document.getElementById('update').addEventListener('click', function(e) {
-						
-						var kap = document.getElementById('kap').value;
-						var len = document.getElementById('len').value;
-						
-						selected.properties.capacity = kap;
-						selected.properties.traveltime = len;
-						s.graph.edges()[selected.id].label = kap + "/" + len;
-						s.refresh();
-						hideContextMenu();
-					});
+					document.getElementById('update').addEventListener('click', updateByTextfield);
 					
 					hideContextMenuNodes();
 					var newString = "Kante: (" + s.graph.nodes()[selected.source].label + "," + s.graph.nodes()[selected.target].label + ")";
@@ -732,7 +737,6 @@
 				});
 			}); 
 			
-			var selected;
 			
 			function updateByCheckbox () {
 					if(document.getElementById("context-s-checkbox").checked && selected.type != 's') {
@@ -768,7 +772,6 @@
 						s.graph.nodes()[selected.id].label = document.getElementById('nam').value;
 					}
 					s.refresh();
-					//document.getElementById('update2').removeEventListener('click', updateByCheckbox);
 					hideContextMenuNodes();
 				}
 
