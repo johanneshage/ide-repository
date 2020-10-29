@@ -5,6 +5,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from collections import deque
+import sys
 
 
 class Application:
@@ -79,7 +80,8 @@ class Application:
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111)
         fig_manager = plt.get_current_fig_manager()
-        fig_manager.full_screen_toggle()  # setze Plot auf Vollbild
+        # fig_manager.full_screen_toggle()  # setze Plot auf Vollbild
+        fig_manager.window.state('zoomed')  # maximiere Plot
         self.fig.show()  # zeige Plot an
         plt.ylim(-1.5, 1.5)  # setzte Höhe des Plots, damit Rechtecke in jedem Plot gleich groß
         plt.xlim(-1.25, 1.25)
@@ -87,6 +89,9 @@ class Application:
             self.posit = nx.shell_layout(G)  # Layout für Knotenpositionen
         else:
             self.posit = posit  # falls graph aus gexf-datei importiert wurde, verwende auch dessen Layout
+
+        # beendet gesamtes Programm bei Klicken des 'x' - Buttons
+        fig_manager.window.protocol('WM_DELETE_WINDOW', sys.exit)
 
         colorMap = []
         # Farben werden für unterschiedliche Zielknoten verwendet (gibt es mehr Zielknoten als "len(self.colors)", so
