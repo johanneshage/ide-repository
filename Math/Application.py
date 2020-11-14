@@ -43,7 +43,6 @@ class Application:
         self.start_queue = start_queue  # Liste der Startzeitpunkte der virtuellen Zuflüsse
         self.ende_queue = ende_queue  # Liste der Endzeitpunkte der virtuellen Zuflüsse
         self.y0_queue = y0_queue  # Liste der virtuellen Zuflussmengen
-        self.button_win = ButtonWindowFrame(self)  # erzeuge Abfragefenster
         self.maxiter = 150
         self.E = []  # Kanten
         self.nu = []  # Kapazitaeten
@@ -78,6 +77,7 @@ class Application:
         self.keys = G.keys()
 
         self.fig = plt.figure()
+        #print("FIG", self.fig)
         self.ax = self.fig.add_subplot(111)
         fig_manager = plt.get_current_fig_manager()
         # fig_manager.full_screen_toggle()  # setze Plot auf Vollbild
@@ -253,7 +253,8 @@ class Application:
         plt.title('Theta = 0')  # setze Titel des Plots
         self.fig.canvas.draw()
 
-        AbfrageVirtuelleSpieler(self)
+        self.button_win = ButtonWindowFrame(self)  # erzeuge Buttonleiste
+        AbfrageVirtuelleSpieler(self)  # erzeuge Abfragefenster
 
     def runner(self):
         """

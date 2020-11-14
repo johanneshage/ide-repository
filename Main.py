@@ -92,14 +92,19 @@ class Main:
 
 def main():
     try:
+        data.R
+        data.ST
+    except AttributeError:
+        raise AttributeError('\'R\' und \'ST\' müssen in \'data.py\' in jedem Fall angegeben werden')
+    try:
         graph = data.graph
     except AttributeError:
         graph = None
     try:
         alpha = data.alpha
     except AttributeError:
-        # falls 'alpha' nicht spezifiziert, verwende Standardwert 1/2
-        alpha = 1/2
+        # falls 'alpha' nicht spezifiziert, verwende Standardwert 1/2 für alle Spieler
+        alpha = len(data.R) * [1/2]
     try:
         variante = data.variante
     except AttributeError:

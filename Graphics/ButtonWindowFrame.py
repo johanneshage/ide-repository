@@ -1,5 +1,7 @@
 import tkinter as tk
 import matplotlib.patches as patches
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
 
 
 class ButtonWindowFrame(tk.Frame):
@@ -36,6 +38,7 @@ class ButtonWindowFrame(tk.Frame):
         # Rahmen für die Buttons
         button_frame = tk.Frame(self)
         button_frame.pack(fill=None, expand=True, side=tk.TOP, padx=int(self.screenwidth/8))
+        #button_frame.pack(fill=None, padx=int(self.screenwidth/8))
         # button_frame.config(background="#0000ee")
         # self.master.update_idletasks()
         self.framewidth = button_frame.winfo_width()

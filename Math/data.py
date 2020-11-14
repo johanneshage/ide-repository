@@ -31,7 +31,6 @@ y0_queue = [4, 4]  # Menge des virtuellen Einflusses'''
 
 R = 2*[0]
 ST= 2*[(1,1)]
-alpha = 2*[1/2]
 
 
 # graph, falls kein Graph spezifiziert, so wird Graph aus Datei "GraphenGEXF/myGraph.gexf" eingelesen
