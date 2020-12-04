@@ -76,13 +76,17 @@ class Application:
         self.items = G.items()
         self.keys = G.keys()
 
-        self.fig = plt.figure()
+        self.fig = plt.figure(figsize=(3,3), dpi=100)
         #print("FIG", self.fig)
         self.ax = self.fig.add_subplot(111)
-        fig_manager = plt.get_current_fig_manager()
+        #self.screenwidth = self.fig.winfo_screenwidth()
+        #self.screenheight = self.fig.winfo_screenheight()
+        #self.fig.geometry("{}x{}".format(int(self.screenwidth), int(self.screenheight)))
+        #fig_manager = plt.get_current_fig_manager()
         # fig_manager.full_screen_toggle()  # setze Plot auf Vollbild
-        fig_manager.window.state('zoomed')  # maximiere Plot
-        self.fig.show()  # zeige Plot an
+        #fig_manager.window.state('zoomed')  # maximiere Plot
+        #self.fig.Maximize(True)
+        #self.fig.show()  # zeige Plot an
         plt.ylim(-1.5, 1.5)  # setzte Höhe des Plots, damit Rechtecke in jedem Plot gleich groß
         plt.xlim(-1.25, 1.25)
         if posit is None:
@@ -91,7 +95,7 @@ class Application:
             self.posit = posit  # falls graph aus gexf-datei importiert wurde, verwende auch dessen Layout
 
         # beendet gesamtes Programm bei Klicken des 'x' - Buttons
-        fig_manager.window.protocol('WM_DELETE_WINDOW', sys.exit)
+        #fig_manager.window.protocol('WM_DELETE_WINDOW', sys.exit)
 
         colorMap = []
         # Farben werden für unterschiedliche Zielknoten verwendet (gibt es mehr Zielknoten als "len(self.colors)", so

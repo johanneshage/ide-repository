@@ -2,6 +2,8 @@ import tkinter as tk
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
+import sys
 
 
 class ButtonWindowFrame(tk.Frame):
@@ -20,59 +22,72 @@ class ButtonWindowFrame(tk.Frame):
         self.app = app
         self.screenwidth = self.master.winfo_screenwidth()
         self.screenheight = self.master.winfo_screenheight()
-        self.master.wm_attributes('-topmost', True)
-        self.master.overrideredirect(True)
-        self.master.geometry("{}x{}+0+{}".format(int(self.screenwidth), int(self.screenheight/6),
-                                                 int(self.screenheight * 7/8)))
-        self.master.config(background='black')
+        #self.master.wm_attributes('-topmost', True)
+        #self.master.overrideredirect(True)
+        self.master.geometry("{}x{}".format(int(self.screenwidth), int(self.screenheight)))
+        #self.master.config(background='black')
         #self.master.update_idletasks()
         #self.master.config(width = self.master.winfo_screenwidth(), height = self.master.winfo_screenheight()/6) #,
         # background="#0000ee"
         super().__init__(self.master)
+        self.master.protocol('WM_DELETE_WINDOW', sys.exit)  # beendet Programm bei Klicken des 'X'-Buttons
         #self.pack()
-        self.pack(fill="both", expand=True)
+        #self.pack(fill="both", expand=True)
+        canvas = FigureCanvasTkAgg(self.app.fig, master=self.master)
+        #canvas.draw()
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+
+
+        #toolbar = NavigationToolbar2Tk(canvas, self.master)
+        #toolbar.update()
+        #canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        #canvas.get_tk_widget().grid(row=1, column=1)
 
         self.unpaused = False
         self.zeitpunkt = 0
 
         # Rahmen für die Buttons
         button_frame = tk.Frame(self)
-        button_frame.pack(fill=None, expand=True, side=tk.TOP, padx=int(self.screenwidth/8))
+        #button_frame.grid(row=0, column=0, sticky="n")
+        #button_frame.pack(fill=None, expand=True, side=tk.TOP, padx=int(self.screenwidth/8))
         #button_frame.pack(fill=None, padx=int(self.screenwidth/8))
         # button_frame.config(background="#0000ee")
         # self.master.update_idletasks()
-        self.framewidth = button_frame.winfo_width()
-        self.frameheight = button_frame.winfo_height()
+        #self.framewidth = button_frame.winfo_width()
+        #self.frameheight = button_frame.winfo_height()
         # button_frame.update()
         # self.master.update_idletasks()
 
-        self.prev = tk.Button(button_frame, text="Zurück", command=self.back, state="disabled")  # Button: Zurück
-        self.prev["bg"] = "#14ADA0"  # Farbe
-        self.prev["fg"] = "#FFFFFF"  # Schriftfarbe: weiß
+        self.prev = tk.Button(canvas.get_tk_widget(), text="Zurück", command=self.back, state="disabled")  # Button: Zurück
+        #self.prev["bg"] = "#14ADA0"  # Farbe
+        #self.prev["fg"] = "#FFFFFF"  # Schriftfarbe: weiß
         self.prev["relief"] = "flat"
         self.prev["height"] = 2
         self.prev["width"] = 19
         self.prev["font"] = "Arial 12 bold"
-        # self.prev.pack(padx = int(1/3 * self.screenwidth), pady = int(11/12 * self.screenheight))
-        self.prev.pack(side=tk.LEFT, padx=0, pady=0)
+        #self.prev.pack(padx = int(1/3 * self.screenwidth), pady = int(11/12 * self.screenheight))
+        self.prev.pack(side=tk.BOTTOM, padx=0, pady=0)
+        #self.prev.grid(row=2,column=1,sticky="we")
+        #button1_window = canvas.create_window(10, 10, anchor=NW, window=self.prev)
 
-        self.pause = tk.Button(button_frame, text="Pause", command=self.pause, state="disabled")  # Button: Pause
-        self.pause["bg"] = "#1894CE"
-        self.pause["fg"] = "#FFFFFF"
+        self.pause = tk.Button(canvas.get_tk_widget(), text="Pause", command=self.pause, state="disabled")  # Button: Pause
+        #self.pause["bg"] = "#1894CE"
+        #self.pause["fg"] = "#FFFFFF"
         self.pause["relief"] = "flat"
         self.pause["height"] = 2
         self.pause["width"] = 19
         self.pause["font"] = "Arial 12 bold"
         self.pause.pack(side=tk.LEFT, padx=0, pady=0)
 
-        self.nex = tk.Button(button_frame, text ="Weiter", command = self.weiter, state="disabled")  # Button: Weiter
-        self.nex["bg"] = "#14ADA0"  # Farbe
-        self.nex["fg"] = "#FFFFFF"  # Schriftfarbe: weiß
+        self.nex = tk.Button(canvas.get_tk_widget(), text ="Weiter", command = self.weiter, state="disabled")  # Button: Weiter
+        #self.nex["bg"] = "#14ADA0"  # Farbe
+        #self.nex["fg"] = "#FFFFFF"  # Schriftfarbe: weiß
         self.nex["relief"] = "flat"  # entfernt Rand
         self.nex["height"] = 2
         self.nex["width"] = 19
         self.nex["font"] = "Arial 12 bold"
-        self.nex.pack(side=tk.LEFT, padx=0, pady=0)
+        self.nex.pack(side=tk.RIGHT, padx=0, pady=0)
 
     def pause(self):
         """
