@@ -1,9 +1,6 @@
 from Graphics.ButtonWindowFrame import ButtonWindowFrame
 from Graphics.AbfrageVirtuelleSpieler import AbfrageVirtuelleSpieler
 import numpy as np
-import networkx as nx
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from collections import deque
 import sys
 
@@ -13,7 +10,7 @@ class Application:
     Objekt der Klasse "Application" stellt eine Anwendung des Hauptprogramms dar
     """
 
-    def __init__(self, G, R, ST, alpha, posit=None, variante='A', kanten_queue=[], start_queue=[],
+    def __init__(self, G, R, ST, alpha, posit, variante='A', kanten_queue=[], start_queue=[],
                  ende_queue=[], y0_queue=[]):
         """
         Initialisiert Graph und alle Variablen, sowie Kantenkosten und erzeugt Plot zum Zeitpunkt 0 (vor eventuellem
@@ -56,19 +53,16 @@ class Application:
         self.n = len(self.V)  # Anzahl Knoten
         self.fp = []  # f^+
         self.fm = []  # f^-
+        self.fm.append(self.num * [None])
+        self.fp.append(self.num * [None])
         self.ST = ST  # Zuordnung Start- und Zielknoten zu Spieler
         self.alpha = alpha
         self.R = R  # Startzeitpunkte
-        init_m = []
-        init_p = []
-        for i in self.I:
-            init_p.append(None)
-            init_m.append(None)
-        self.fm.append(init_m)
-        self.fp.append(init_p)
         self.variante = variante
         self.G = G  # Graph
         self.ankunft = 0  # zählt angekommene Spieler
+        self.zeitpunkt = 0
+        self.unpaused = True  # Programm zu Beginn nicht pausiert
         self.deques = []  # Liste aller deques (= Warteschlangen)
         # Liste "leaveQueue" enthält für jeden Zeitpunkt für jede Kante eine Liste der Spieler, die zum gegebenen
         # Zeitpunkt die Warteschlange dieser Kante verlassen
@@ -76,9 +70,6 @@ class Application:
         self.items = G.items()
         self.keys = G.keys()
 
-        self.fig = plt.figure(figsize=(3,3), dpi=100)
-        #print("FIG", self.fig)
-        self.ax = self.fig.add_subplot(111)
         #self.screenwidth = self.fig.winfo_screenwidth()
         #self.screenheight = self.fig.winfo_screenheight()
         #self.fig.geometry("{}x{}".format(int(self.screenwidth), int(self.screenheight)))
@@ -87,42 +78,14 @@ class Application:
         #fig_manager.window.state('zoomed')  # maximiere Plot
         #self.fig.Maximize(True)
         #self.fig.show()  # zeige Plot an
-        plt.ylim(-1.5, 1.5)  # setzte Höhe des Plots, damit Rechtecke in jedem Plot gleich groß
-        plt.xlim(-1.25, 1.25)
-        if posit is None:
-            self.posit = nx.shell_layout(G)  # Layout für Knotenpositionen
-        else:
-            self.posit = posit  # falls graph aus gexf-datei importiert wurde, verwende auch dessen Layout
+
+        #if posit is None:
+        #    self.posit = nx.shell_layout(G)  # Layout für Knotenpositionen
+        #else:
+        #    self.posit = posit  # falls graph aus gexf-datei importiert wurde, verwende auch dessen Layout
 
         # beendet gesamtes Programm bei Klicken des 'x' - Buttons
         #fig_manager.window.protocol('WM_DELETE_WINDOW', sys.exit)
-
-        colorMap = []
-        # Farben werden für unterschiedliche Zielknoten verwendet (gibt es mehr Zielknoten als "len(self.colors)", so
-        # werden die Farben mehrfach verwendet)
-        self.colors = ["limegreen", "orange", "magenta", "turquoise", "gold", "darkviolet"]
-        graph = nx.DiGraph()  # erzeuge networkx-Graph
-        for v in self.V:
-            graph.add_node(v)
-            name = str(v)
-            if (name.startswith("s") or name.startswith("t")) and len(name) > 1:
-                try:
-                    # bestimme Nummer des Start-/Zielknotens; ValueError, falls keine gültige Nummer vorhanden
-                    farbe = int(name[1:])
-                    if name.startswith("s"):
-                        # weise Quellknoten die jeweilige Farbe zu
-                        colorMap.append("deepskyblue")
-                        continue
-                    else:
-                        # weise Zielknoten die jeweilige Farbe zu
-                        colorMap.append(self.colors[(farbe-1) % len(self.colors)])
-                        continue
-                except ValueError:
-                    # Knoten ist kein Start- oder Zielknoten, sondern ein anderer Knoten dessen Name mit "s" oder "t"
-                    # beginnt
-                    colorMap.append("paleturquoise")  # Standardfarbe für alle anderen Knoten
-                    continue
-            colorMap.append("paleturquoise")  # Standardfarbe für alle anderen Knoten
 
         #newpath = "GraphenGEXF"
         #if not os.path.exists(newpath):
@@ -151,37 +114,12 @@ class Application:
                 deq = deque()
                 # "deques" enthält für jede Kante die entsprechende Warteschlange !!RECHTS IST VORNE, LINKS IST HINTEN!!
                 self.deques.append(deq)
-                graph.add_edge(delta[0], w)
         self.m = len(self.E)  # Anz. Kanten
-
-        self.spieler = []  # Rechtecke für Spieler
-        self.numbers = []  # Nummerierung der Spieler
-        self.spielerV = []  # Rechtecke für virtuelle Spieler
-        self.rec_height = 0.05
-        self.rec_width = 0.04
-        for i in self.I:
-            # Rechtecke repräsentieren Spieler
-            self.spieler.append(patches.Rectangle(self.posit['s{}'.format(self.ST[i][0])], self.rec_width,
-                                                  self.rec_height, linewidth=1, edgecolor='black',
-                                                  facecolor= self.colors[self.ST[i][1]-1 % len(self.colors)]))
-            # hinzufügen Spieler zu subplot
-            self.ax.add_patch(self.spieler[-1])
-            # hinzufügen Nummern (für Spieler) zu subplot
-            self.numbers.append(self.ax.text(self.posit['s{}'.format(self.ST[i][0])][0],
-                                             self.posit['s{}'.format(self.ST[i][0])][1], str(i+1), fontsize=6))
-        for e in self.E:
-            self.spielerV.append(deque())
-
-        nx.draw(graph, self.posit, node_color=colorMap, with_labels=True, alpha=0.8)  # zeichnen des Graphen
-        self.fig.canvas.draw()
 
         self.graphReversed = self.reverse_graph(G)
 
-        init = []
-        for i in self.I:
-            init.append(None)
-        self.fm.append(init)  # Initialisierung "self.fm" für alle Spieler
-        self.currentPos = self.num * [None]  # Initialisierung "self.currentPos" für alle Spieler
+        self.fm.append(self.num*[None])  # Initialisierung "self.fm" für alle Spieler
+        self.currentPos = self.ST[:][0]   # Initialisierung "self.currentPos" -> Spieler befinden sich in Quellen
 
         self.c.append(np.zeros((self.num, self.m)))
         # gibt es eine virtuelle Queue beginnend bei theta = 0, so muss diese bei der Initialisierung von "self.c"
@@ -219,7 +157,7 @@ class Application:
                         if self.R[i_prime] == 0 and self.pos(i_prime, 0) == 's{}'.format(s):
                             j[startknoten.index(s)] += 1
                     # <Anzahl Spieler in "s"> durch <Anzahl von "s" ausgehende Kanten>
-                    j[startknoten.index(s)] /= float(len(graph['s{}'.format(s)].keys()))
+                    j[startknoten.index(s)] /= float(len(self.button_win.graph['s{}'.format(s)].keys()))
                 for e in self.E:
                     name = str(e[0])
                     # Kosten der von Startknoten ausgehenden Kanten, diese berücksichtigen j-Werte der Spieler, die zum
@@ -236,28 +174,11 @@ class Application:
                                                         (self.c[0][i][self.E.index(e)]/float(self.nu[self.E.index(e)]))\
                                                         + self.r[self.E.index(e)]
 
-        # erste Liste in "first" enthält alle vorkommenden Positionen, zweite Liste den Spieler mit kleinstem Index in
-        # dieser Position
-        first = [[], []]
-        for i in self.I:  # Plot vor Start des Programms
-            self.currentPos[i] = self.pos(i, 0)  # berechne Kosten Spieler "i" zum Zeitpunkt 0
-            if self.currentPos[i] not in first[0]:  # erster Spieler in Position "self.currentPos[i]"
-                first[0].append(self.currentPos[i])
-                first[1].append(i)
-                self.spieler[i].set_xy(self.posit[self.currentPos[i]]) # neue Position Spieler
-                self.numbers[i].set_x(self.posit[self.currentPos[i]][0]+self.rec_width/3) # neue Position Nummer
-                self.numbers[i].set_y(self.posit[self.currentPos[i]][1]+self.rec_height/4)
-            else:  # alle weiteren Spieler in Position "self.currentPos[i]"
-                count = self.currentPos[:i].count(self.currentPos[i])
-                x, y = self.spieler[first[1][first[0].index(self.currentPos[i])]].get_xy()
-                # setze Rechtecke der Spieler in gleicher Position übereinander
-                self.spieler[i].set_xy((x,y+count*self.rec_height))
-                self.numbers[i].set_x(x + self.rec_width/3)
-                self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
-        plt.title('Theta = 0')  # setze Titel des Plots
-        self.fig.canvas.draw()
-
-        self.button_win = ButtonWindowFrame(self)  # erzeuge Buttonleiste
+        self.button_win = ButtonWindowFrame(self.E, self.V, self.I, self.ST, self.r, posit)  # erzeuge Buttonleiste
+        # weise Buttons Funktionen zu
+        self.button_win.prev.configure(command=self.back)
+        self.button_win.pause.configure(command=self.pause)
+        self.button_win.nex.configure(command=self.weiter)
         AbfrageVirtuelleSpieler(self)  # erzeuge Abfragefenster
 
     def runner(self):
@@ -267,16 +188,16 @@ class Application:
                  1, falls Programm nicht pausiert. In diesem Fall wird "runner" erneut aufgerufen,
                  -1, falls Programm pausiert. In diesem Fall wird "runner" nicht erneut aufgerufen.
         """
-        while self.button_win.get_zeit() < self.maxiter:
+        while self.zeitpunkt < self.maxiter:
             if self.ankunft >= self.num:   # Abbruchkriterium
                 self.button_win.nex.config(state="disabled")
                 return 0
-            if self.button_win.get_unpaused():
+            if self.unpaused:
                 if self.button_win.prev['state'] == 'disabled':
                     self.button_win.prev.config(state="normal")
                 # Vergrößere Liste "self.leaveQueue", falls nötig (also falls "self.run(self.button_win.get_zeit() + 1)"
                 # vorher noch nicht aufgerufen wurde)
-                if len(self.leaveQueue) < self.button_win.get_zeit() + 2:
+                if len(self.leaveQueue) < self.zeitpunkt + 2:
                     init_p = []
                     init_m = []
                     for i in self.I:
@@ -285,8 +206,8 @@ class Application:
                     self.fm.append(init_m)
                     self.fp.append(init_p)
                     self.leaveQueue.append([])
-                self.button_win.set_zeit(self.button_win.get_zeit() + 1)
-                self.run(self.button_win.get_zeit())
+                self.zeitpunkt += 1
+                self.run(self.zeitpunkt)
                 self.button_win.after(1000, self.runner)
                 return 1
             else:
@@ -341,9 +262,9 @@ class Application:
             else:
                 insert -= 1
         for t in reversed(range(insert, theta)):
-            if self.spieler[i] in self.leaveQueue[t][self.E.index(e)]:
-                return (e, theta - t)  # Fall 2
-        return (e,0)  # Fall 3
+            if self.button_win.spieler[i] in self.leaveQueue[t][self.E.index(e)]:
+                return e, theta - t  # Fall 2
+        return e, 0  # Fall 3
 
     def reverse_graph(self, graph):
         """
@@ -402,16 +323,6 @@ class Application:
                 kosten[i][self.E.index(e)] = 1/(1 - alpha[i]) * ((1 - alpha[i]) * self.r[self.E.index(e)] +
                                                                  alpha[i]*wartezeit[self.E.index(e)])
         return kosten
-
-    def remove_artist(self, ind):
-        """
-        entfernt virtuellen Spieler aus Plot
-        :param ind: Index des zu entfernenden virtuellen Spielers
-        :return: kein Rückgabewert
-        """
-        artist = self.spielerV[ind].popleft()
-        artist.remove()
-        return
 
     # Quelle: http://www.gilles-bertrand.com/2014/03/dijkstra-algorithm-python-example-source-code-shortest-path.html
     def dijkstra(self, graph, src, dest, i, theta, visited=[], distances={}, predecessors={}):
@@ -501,17 +412,134 @@ class Application:
                 for y in range(1, y0_queue[t] + 1):
                     # füge "theta" als virtuellen 'Spieler' in Queue ein
                     self.deques[self.E.index(kanten_queue[t])].appendleft(theta)
-                    # speichere virtuelle Spieler in dict., um diese aus Plot entfernen zu können
-                    self.spielerV[self.E.index(kanten_queue[t])].appendleft(
-                        patches.Rectangle((0.91*self.posit[kanten_queue[t][0]][0] +
-                                           0.09*self.posit[kanten_queue[t][1]][0],0.91 *
-                                           self.posit[kanten_queue[t][0]][1] + 0.09*self.posit[kanten_queue[t][1]][1] +
-                                           self.rec_height*
-                                           (len(self.deques[self.E.index(kanten_queue[t])])
-                                            -kap[self.E.index(kanten_queue[t])] -1)), self.rec_width, self.rec_height,
-                                          linewidth=1, edgecolor='black', facecolor= 'white', alpha=0.5))
-                    # füge virtuellen Spieler zu Plot hinzu
-                    self.ax.add_patch(self.spielerV[self.E.index(kanten_queue[t])][0])
+                    self.button_win.add_virtual_player(kanten_queue[t], len(self.deques[self.E.index(kanten_queue[t])])
+                                                                         -kap[self.E.index(kanten_queue[t])] -1)
+        return
+
+    def pause(self):
+        """
+        Bei Aufruf wird Pause-Status geändert (Fortsetzen falls pausiert und andersrum)
+        :return: Kein Rückgabewert
+        """
+        if self.unpaused:
+            self.unpaused  = False
+            self.button_win.set_pause_text("Fortsetzen")
+        else:
+            self.unpaused = True
+            self.button_win.set_pause_text("Pause")
+        return
+
+    def back(self):
+        """
+        Aufruf bei Klicken des Buttons "Zurück" aus "ButtonWindowFrame". Bei Aufruf wird  ein Zeitschritt zurück
+         gegangen. Dazu werden Warteschlangen entsprechend angepasst, wobei dazu virtuelle und reale Spieler gesondert
+         betrachtet werden. Weiter werden Spieler, die bereits an ihrem Ziel angekommen sind und dieses nun wieder
+         verlassen, wieder sichtbar gemacht. Anschließend wird die Funktion "self.runback()" aufgerufen, die alle
+         Positionen neu berechnet und entsprechend anpasst.
+        :return: Kein Rückgabewert
+        """
+        positionenV = []
+        red_list = []
+        for e in self.E:
+            positionenV.append([])
+            # füge Spieler wieder zu Queue hinzu
+            for out in reversed(self.leaveQueue[self.zeitpunkt -1][self.E.index(e)]):
+                try:
+                    int(out)  # TypeError, falls "out" KEIN virtueller Spieler
+                    self.deques[self.E.index(e)].append(out)  # virtuelle Spieler wieder zur Queue hinzufügen
+                    positionenV.append(len(self.deques[self.E.index(e)]) -1)  # merke Positionen virtueller Spieler
+                    # in Warteschlange -> werden an 'button_win' übergeben
+                    continue
+                except TypeError:  # nicht-virtueller Spieler
+                    position = self.pos(self.button_win.spieler.index(out), self.zeitpunkt -1)
+                    if position not in self.V:  # prüfe, ob Spieler zuvor in Warteschlange war
+                        # falls ja, wird er wieder hinzugefügt
+                        self.deques[self.E.index(position[0])].append(out)
+                        red_list.append(out)  # merke Spieler, deren Farbe auf rot gesetzt werden soll
+
+            self.button_win.restore_players(positionenV, red_list)  # graphische Umsetzung des Obigen
+
+        # speichere Spieler und deren neue Farbe in Liste, zur Übergabe an 'self.button_win'
+        player_recolor = []
+        t_index = []
+        for e in self.E:
+            while True:
+                try:
+                    # IndexError falls deque leer. Entferne Spieler aus Queue, falls sie diese zum Zeitpunkt
+                    # "self.zeitpunkt" betreten haben
+                    latest = self.deques[self.E.index(e)].popleft()
+                    # TypeError, falls "latest" KEIN virtueller Spieler ist, ansonsten: prüft, ob virtueller Spieler aus
+                    # Plot und "self.button_win.spielerV" entfernt werden muss
+                    if int(latest) == self.zeitpunkt or int(latest) == self.zeitpunkt -1:
+                        # entferne Spieler auch aus "self.button_win.spielerV" und aus Plot
+                        self.button_win.remove_artist(self.E.index(e))
+                        continue
+                    # latest ist virtueller Spieler und schon vor "self.zeitpunkt" in deque gewesen
+                    else:
+                        # "latest" wird wieder zur deque hinzugefügt und es wird abgebrochen
+                        self.deques[self.E.index(e)].appendleft(latest)
+                        break
+                except IndexError:  # deque leer
+                    break
+                except TypeError:  # "latest" ist realer Spieler
+                    # prüft, ob Spieler "latest" sich im Startknoten von "e" befindet, also die deque genau zu
+                    # "self.zeitpunkt" betreten hat und entfernt werden muss
+                    if self.pos(self.button_win.spieler.index(latest), self.zeitpunkt) == e[0]:
+                        continue
+                    # prüft, ob Spieler "latest" Kante "e" zum Zeitpunkt "self.zeitpunkt-1" betreten hat
+                    elif self.fp[self.zeitpunkt-1][self.button_win.spieler.index(latest)] == e:
+                        # wenn ja, umfärben von rot auf ursprüngliche Farbe und weiter mit nächstem Spieler
+                        # merke Spieler
+                        player_recolor.append(latest)
+                        # merke Index des Zielknoten dieses Spielers, zur Bestimmung der Farbe
+                        t_index.append(self.ST[self.button_win.spieler.index(latest)][1]-1)
+                        continue
+                    else:
+                        self.deques[self.E.index(e)].appendleft(latest)  # wenn nein, Abbruch
+                        break
+
+        # umfärben
+        self.button_win.change_color(player_recolor, t_index)
+        self.zeitpunkt -= 1
+        # Informationen für graphischen Teil
+        visibility = []
+        nex_config = False
+        prev_config = False
+        # prüfe, ob Spieler zum Zeitpunkt "self.zeitpunkt" ihren Zielknoten erreicht haben
+        for i in self.I:
+            if self.zeitpunkt == self.z[i]:
+                self.ankunft -= 1  # aktualisiere Abbruchkriterium
+                visibility.append(i)
+        if self.button_win.nex['state'] == 'disabled':
+            nex_config = True
+            self.button_win.after(1000, self.runner)  # runner neustarten, da Programm bereits terminiert hat
+        self.runback(self.zeitpunkt)
+        if self.zeitpunkt == 0:
+            prev_config = True
+
+        # visuelle updates
+        self.button_win.updates(visibility, nex_config, prev_config)
+
+        return
+
+    def weiter(self):
+        """
+        Bei Aufruf wird ein Zeitschritt weiter gegangen, d.h. 'self.run()' aufgerufen.
+        :return: Kein Rückgabewert
+        """
+        if self.ankunft >= self.num:
+            self.button_win.set_nex_status("disabled")
+            return 0
+        if self.button_win.prev['state'] == 'disabled':
+            self.button_win.set_prev_status("normal")
+        # Vergrößere Liste "self.leaveQueue", falls nötig (also falls "self.run(self.zeitpunkt + 1)" vorher noch
+        # nicht aufgerufen wurde)
+        if len(self.leaveQueue) < self.zeitpunkt + 2:
+            self.fm.append(self.num * [None])
+            self.fp.append(self.num * [None])
+            self.leaveQueue.append([])
+        self.zeitpunkt += 1
+        self.run(self.zeitpunkt)
         return
 
     def run(self, theta):
@@ -525,9 +553,6 @@ class Application:
         :return: kein Rückgabewert
         """
         newDists = []
-        # erste Liste in "first" enthält alle vorkommenden Positionen, zweite Liste den Spieler mit kleinstem Index in
-        # dieser Position
-        first = [[], []]
         residualCap = self.nu.copy()
         if len(self.label) < theta or theta == 0:
             rerun = False
@@ -541,18 +566,15 @@ class Application:
                                  residualCap)
 
         if not rerun:
-            if theta == 0:
-                for i in self.I:
-                    self.currentPos[i] = self.pos(i,0)
             for i in self.I:
                 if self.z[i] == -1:
                     if self.currentPos[i] in self.V:
                         if theta > 0:
                             newDists.append(self.dijkstra(self.graphReversed, "t{}".format(self.ST[i][1]),
-                                                          self.currentPos[i],i,theta -1,visited = [], distances={}))
+                                                          self.currentPos[i],i,theta -1,visited=[], distances={}))
                         else:
                             newDists.append(self.dijkstra(self.graphReversed, "t{}".format(self.ST[i][1]),
-                                                          self.currentPos[i],i,theta,visited = [], distances={}))
+                                                          self.currentPos[i],i,theta,visited=[], distances={}))
                     elif self.currentPos[i][1] == 0:
                         # befindet sich Spieler "i" momentan auf einer Kante, so werden seine Labels nicht benötigt und
                         # daher auch nicht berechnet, um Rechenzeit zu sparen
@@ -564,7 +586,6 @@ class Application:
                 else:
                     # ist Spieler "i" bereits bei seiner Senke angekommen, so werden die Labels nicht benötigt
                     newDists.append(self.n*[None])
-
 
         if not rerun and theta > 0:
             # füge weitere Zeile in "self.label" ein, diese enthält die self.labels aller Spieler zum Zeitpunkt "theta"
@@ -601,6 +622,9 @@ class Application:
                         raise TypeError('Knoten {} von {} nicht erreichbar!'.format("t{}".format(self.ST[i][1]),
                                                                                     self.currentPos[i]))
 
+        # speichere Spieler und deren neue Farbe in Liste, zur Übergabe an 'self.button_win'
+        player_recolor = []
+        t_index = []
         for e in self.E:  # bestimme aktuelle Queue für jede Kante
             if not rerun:
                 self.leaveQueue[theta -1].append([])
@@ -611,40 +635,43 @@ class Application:
                     self.leaveQueue[theta -1][self.E.index(e)].append(nextPlayer)
                 try:
                     int(nextPlayer)  # TypeError, falls "nextPlayer" nicht-virtueller Spieler
-                    if len(self.spielerV[self.E.index(e)]) > 0:
-                        v = self.spielerV[self.E.index(e)].pop()  # entferne virtuellen Spieler
-                        v.remove()  # entferne virtuellen Spieler aus plot
+                    self.button_win.pop_right(self.E.index(e))
                 except TypeError:
-                    # umfärben von rot auf ursprüngliche Farbe
-                    self.spieler[self.spieler.index(nextPlayer)].set_facecolor(
-                        self.colors[self.ST[self.spieler.index(nextPlayer)][1]-1 % len(self.colors)])
+                    # merke umzufärbende Spieler
+                    player_recolor.append(nextPlayer)
+                    # merke Index des Zielknoten dieses Spielers, zur Bestimmung der Farbe
+                    t_index.append(self.ST[self.button_win.spieler.index(nextPlayer)][1]-1)
             if theta > 0:
                 for i in self.I:
                     if self.fp[theta-1][i] == e:
                         if residualCap[self.E.index(e)] == 0:
-                            self.deques[self.E.index(e)].appendleft(self.spieler[i])  # hinzufügen Spieler "i" zu Queue
+                            self.deques[self.E.index(e)].appendleft((i, 'r'))  # hinzufügen Spieler "i" zu Queue , 'r'
+                            # markiert diesen als realen Spieler
                         else:
                             if not rerun:
-                                self.leaveQueue[theta-1][self.E.index(e)].append(self.spieler[i])
+                                self.leaveQueue[theta-1][self.E.index(e)].append((i, 'r'))  # 'r': realer Spieler
                             residualCap[self.E.index(e)] -= 1
+
+        # Umfärben in Plot
+        self.button_win.change_color(player_recolor, t_index)
 
         if not rerun and theta > 0:
             for i in self.I:
                 # verwendet den Wert von "self.currentPos[i]" vom VORHERIGEN Zeitpunkt um "fm" für den aktuellen
                 # Zeitpunkt bestimmen zu können
                 if self.currentPos[i] in self.V:
-                    if self.fp[theta-1][i] is not None:
-                        if self.r[self.E.index(self.fp[theta-1][i])] == 1:
-                            for spielerliste in self.leaveQueue[theta-1][self.E.index(self.fp[theta-1][i])]:
-                                try:
-                                    int(spielerliste)  # überspringe virtuelle Spieler
-                                except TypeError:  # "spielerliste" ist echter Spieler
-                                    if i == self.spieler.index(spielerliste):
-                                        # falls die Kante "fp[theta-1][i]", welche Spieler "i" zum Zeitpunkt "theta-1"
-                                        # betritt, die Reisedauer 1 hat und Länge der Warteschlange kleiner als die
-                                        # Kantenkapazität ist, so wird Spieler "i" die Kante zum Zeitpunkt "theta"
-                                        # wieder verlassen
-                                        self.fm[theta][i] = self.fp[theta-1][i]
+                    if self.fp[theta-1][i] is not None and self.r[self.E.index(self.fp[theta-1][i])] == 1:
+                        for spielerliste in self.leaveQueue[theta-1][self.E.index(self.fp[theta-1][i])]:
+                            try:
+                                int(spielerliste)  # überspringe virtuelle Spieler
+                            except TypeError:  # "spielerliste" repräsentiert realen Spieler, ist also Tupel der Form
+                                # (j, 'r'), wobei j der Index des entsprechenden Spielers ist
+                                if (i, 'r') == spielerliste:
+                                    # falls die Kante "fp[theta-1][i]", welche Spieler "i" zum Zeitpunkt "theta-1"
+                                    # betritt, die Reisedauer 1 hat und Länge der Warteschlange kleiner als die
+                                    # Kantenkapazität ist, so wird Spieler "i" die Kante zum Zeitpunkt "theta"
+                                    # wieder verlassen
+                                    self.fm[theta][i] = self.fp[theta-1][i]
                 else:
                     # überprüft, ob sich Spieler "i" zum vorherigen Zeitpunkt auf einer Kante, genau eine Zeiteinheit
                     # vor dem Ende der Kante, befunden hat
@@ -658,8 +685,9 @@ class Application:
                             for spielerliste in self.leaveQueue[theta-1][self.E.index(self.currentPos[i][0])]:
                                 try:
                                     int(spielerliste)  # überspringe virtuelle Spieler
-                                except TypeError:
-                                    if i == self.spieler.index(spielerliste):
+                                except TypeError:  # "spielerliste" repräsentiert realen Spieler, ist also Tupel der
+                                    # Form (j, 'r'), wobei j der Index des entsprechenden Spielers ist
+                                    if (i, 'r') == spielerliste:
                                         self.fm[theta][i] = self.currentPos[i][0]
 
         for i in self.I:
@@ -667,191 +695,40 @@ class Application:
                 self.currentPos[i] = self.pos(i, theta)
                 # print("Position Spieler " + str(i+1) + " zum Zeitpunkt " + str(theta) + " : " +
                 # str(self.currentPos[i]))
-                if self.currentPos[i] in self.V:
-                    # Spieler werden nicht mehr angezeigt, wenn Senke erreicht
-                    if self.currentPos[i] == "t{}".format(self.ST[i][1]):
-                        self.spieler[i].set_visible(False)
-                        self.numbers[i].set_visible(False)
-                        if self.z[i] == -1:
-                            self.z[i] = theta  # setze Ankunftszeit
-                        if self.z[i] == theta:  # aktualisiere Abbruchkriterium
-                            self.ankunft += 1
-                    elif self.currentPos[i] not in first[0]:
-                        first[0].append(self.currentPos[i])
-                        first[1].append(i)
-                        # neue Position Spieler
-                        self.spieler[i].set_xy(self.posit[self.currentPos[i]])
-                        # neue Position Nummer
-                        self.numbers[i].set_x(self.posit[self.currentPos[i]][0]+self.rec_width/3)
-                        self.numbers[i].set_y(self.posit[self.currentPos[i]][1]+self.rec_height/4)
-                    else:
-                        # zähle Spieler in gleicher Position mit kleinerem Index
-                        count = self.currentPos[:i].count(self.currentPos[i])
-                        # ziehe Spieler die an ihrem Zielknoten angekommen (und nicht sichtbar) sind, ab
-                        for sp in self.I[:i]:
-                            if self.z[sp] != -1 and self.z[sp] <= theta and self.currentPos[sp] == self.currentPos[i]:
-                                count -= 1
-                        x, y = self.spieler[first[1][first[0].index(self.currentPos[i])]].get_xy()
-                        # setze Rechtecke der Spieler in gleicher Position übereinander
-                        self.spieler[i].set_xy((x, y+count*self.rec_height))
-                        self.numbers[i].set_x(x + self.rec_width/3)
-                        self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
-                elif self.currentPos[i][1] != 0:
-                    if self.currentPos[i] not in first[0]:
-                        first[0].append(self.currentPos[i])
-                        first[1].append(i)
-                        self.spieler[i].set_xy((1-self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][0]] +
-                                               (self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][1]])  # neue Position Spieler auf Kante
-                        self.numbers[i].set_x(((1-self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][0]] +
-                                               (self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][1]])[0]+self.rec_width/3)
-                        self.numbers[i].set_y(((1-self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][0]] +
-                                               (self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][1]])[1]+self.rec_height/4)
-                    else:
-                        count = self.currentPos[:i].count(self.currentPos[i])
-                        # Koordinaten des ersten Spielers
-                        x, y = self.spieler[first[1][first[0].index(self.currentPos[i])]].get_xy()
-                        # setze Rechtecke der Spieler in gleicher Position übereinander
-                        self.spieler[i].set_xy((x,y+count*self.rec_height))
-                        self.numbers[i].set_x(x+self.rec_width/3)
-                        self.numbers[i].set_y(y+count*self.rec_height+self.rec_height/4)
+                if self.currentPos[i] == "t{}".format(self.ST[i][1]):
+                    if self.z[i] == -1:
+                        self.z[i] = theta  # setze Ankunftszeit
+                    if self.z[i] == theta:  # aktualisiere Abbruchkriterium
+                        self.ankunft += 1
 
-        for e in self.E:  # setzen der Positionen von Spielern in Warteschlange
-            j = len(self.deques[self.E.index(e)]) -1  # erster Index in der deque
-            vcount = 0
-            while j >= 0:
-                try:
-                    # TypeError, falls Spieler "self.deques[self.E.index(e)][j]" KEIN virtueller Spieler
-                    int(self.deques[self.E.index(e)][j])
-                    # setze Position virtueller Spieler
-                    self.spielerV[self.E.index(e)][vcount].set_xy((0.91*self.posit[e[0]][0] + 0.09*self.posit[e[1]][0],
-                                                                   0.91*self.posit[e[0]][1] + 0.09*self.posit[e[1]][1] +
-                                                                   self.rec_height *
-                                                                   (len(self.deques[self.E.index(e)]) -1 -j)))
-                    vcount += 1
-                except TypeError:
-                    self.deques[self.E.index(e)][j].set_facecolor('red')
-                    # setze Position von Spieler "self.deques[self.E.index(e)][j]"
-                    self.spieler[self.spieler.index(self.deques[self.E.index(e)][j])].set_xy((0.91*self.posit[e[0]][0] +
-                                                                                              0.09*self.posit[e[1]][0],
-                                                                                              0.91*self.posit[e[0]][1] +
-                                                                                              0.09*self.posit[e[1]][1] +
-                                                    self.rec_height*(len(self.deques[self.E.index(e)]) -1 -j)))
-                    self.numbers[self.spieler.index(self.deques[self.E.index(e)][j])].set_x(0.91*self.posit[e[0]][0] +
-                                                                                            0.09*self.posit[e[1]][0] +
-                                                                                            self.rec_width/3)
-                    self.numbers[self.spieler.index(self.deques[self.E.index(e)][j])].set_y(0.91*self.posit[e[0]][1] +
-                                                                                            0.09*self.posit[e[1]][1] +
-                                                                                            self.rec_height/4 +
-                                                                                            self.rec_height *
-                                                                            (len(self.deques[self.E.index(e)]) -1 -j))
-                j -= 1
-
-        plt.title('Theta = {}'.format(theta))  # setze neuen Titel des Plots
-        self.fig.canvas.draw()  # redraw
+        # Aktualisierung Plot
+        self.button_win.draw_new_positions(self.currentPos)
+        self.button_win.draw_new_queue_positions(self.deques)
+        self.button_win.redraw(theta)
 
         if not rerun and theta > 0:
             self.c.append(self.varianten(self.alpha, self.G, var=self.variante, anz=J))
+
         return
 
     def runback(self, theta):
         """
         wie "run"-Methode zum Zeitpunkt "theta", angepasst für den Fall, dass "Zurück" - Button gedrückt wurde. Im
         Unterschied zu einem Aufruf von "run(theta)" mit "rerun"=True, werden hier die Warteschlangen nicht verändert,
-        da dies bereits beim Klicken des Buttons "Zurück" in der Funktion "ButtonWindowFrame.back()" geschieht.
+        da dies bereits beim Klicken des Buttons "Zurück" in der Funktion "self.back()" geschieht.
         :param theta: aktueller Zeitpunkt
         :return: kein Rückgabewert
         """
-        # erste Liste enthält alle vorkommenden Positionen, zweite Liste den Spieler mit kleinstem Index in jeder dieser
-        # Positionen
-        first = [[], []]
 
+        # Aktualisierung Positionen
         for i in self.I:
             if self.z[i] == -1 or self.z[i] > theta:
                 self.currentPos[i] = self.pos(i, theta)
                 # print("Position Spieler " + str(i+1) + " zum Zeitpunkt " + str(theta) + " : " + str(currentPos[i]))
-                if self.currentPos[i] in self.V:
-                    if self.currentPos[i] != "t{}".format(self.ST[i][1]) and self.currentPos[i] not in first[0]:
-                        first[0].append(self.currentPos[i])
-                        first[1].append(i)
-                        # neue Position Spieler
-                        self.spieler[i].set_xy(self.posit[self.currentPos[i]])
-                        # neue Position Nummer
-                        self.numbers[i].set_x(self.posit[self.currentPos[i]][0]+self.rec_width/3)
-                        self.numbers[i].set_y(self.posit[self.currentPos[i]][1]+self.rec_height/4)
-                    else:
-                        # zähle Spieler in gleicher Position mit kleinerem Index
-                        count = self.currentPos[:i].count(self.currentPos[i])
-                        # ziehe Spieler die an ihrem Zielknoten angekommen (und nicht sichtbar) sind, ab
-                        for sp in self.I[:i]:
-                            if self.z[sp] != -1 and self.z[sp] <= theta and self.currentPos[sp] == self.currentPos[i]:
-                                count -= 1
-                        x,y = self.spieler[first[1][first[0].index(self.currentPos[i])]].get_xy()
-                        # setze Rechtecke der Spieler in gleicher Position übereinander
-                        self.spieler[i].set_xy((x, y+count*self.rec_height))
-                        self.numbers[i].set_x(x + self.rec_width/3)
-                        self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
-                elif self.currentPos[i][1] != 0:
-                    if self.currentPos[i] not in first[0]:
-                        first[0].append(self.currentPos[i])
-                        first[1].append(i)
-                        # neue Position Spieler auf Kante
-                        self.spieler[i].set_xy((1-self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][0]] +
-                                               (self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][1]])
-                        self.numbers[i].set_x(((1-self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][0]] +
-                                               (self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][1]])[0]+self.rec_width/3)
-                        self.numbers[i].set_y(((1-self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][0]] +
-                                               (self.currentPos[i][1]/self.r[self.E.index(self.currentPos[i][0])]) *
-                                               self.posit[self.currentPos[i][0][1]])[1]+self.rec_height/4)
-                    else:
-                        count = self.currentPos[:i].count(self.currentPos[i])
-                        x, y = self.spieler[first[1][first[0].index(self.currentPos[i])]].get_xy()
-                        # setze Rechtecke der Spieler in gleicherPosition übereinander
-                        self.spieler[i].set_xy((x,y+count*self.rec_height))
-                        self.numbers[i].set_x(x+self.rec_width/3)
-                        self.numbers[i].set_y(y+count*self.rec_height+self.rec_height/4)
 
-        for e in self.E:  # setzen der Positionen von Spielern in Warteschlange
-            j = len(self.deques[self.E.index(e)]) -1  # erster Index in der deque
-            vcount = 0
-            while j >= 0:
-                try:
-                    # TypeError, falls Spieler "self.deques[self.E.index(e)][j]" KEIN virtueller Spieler
-                    int(self.deques[self.E.index(e)][j])
-                    # setze Position virtueller Spieler
-                    self.spielerV[self.E.index(e)][vcount].set_xy((0.91*self.posit[e[0]][0] + 0.09*self.posit[e[1]][0],
-                                                                   0.91*self.posit[e[0]][1] + 0.09*self.posit[e[1]][1] +
-                                                    self.rec_height*(len(self.deques[self.E.index(e)]) -1 -j)))
-                    vcount += 1
-                except TypeError:
-                    self.deques[self.E.index(e)][j].set_facecolor('red')
-                    #setze Position von Spieler "self.deques[self.E.index(e)][j]"
-                    self.spieler[self.spieler.index(self.deques[self.E.index(e)][j])].set_xy((0.91*self.posit[e[0]][0] +
-                                                                                              0.09*self.posit[e[1]][0],
-                                                                                              0.91*self.posit[e[0]][1] +
-                                                                                              0.09*self.posit[e[1]][1] +
-                                                                                              self.rec_height *
-                                                                    (len(self.deques[self.E.index(e)]) -1 -j)))
-                    self.numbers[self.spieler.index(self.deques[self.E.index(e)][j])].set_x(0.91*self.posit[e[0]][0] +
-                                                                                            0.09*self.posit[e[1]][0] +
-                                                                                            self.rec_width/3)
-                    self.numbers[self.spieler.index(self.deques[self.E.index(e)][j])].set_y(0.91*self.posit[e[0]][1] +
-                                                                                            0.09*self.posit[e[1]][1] +
-                                                                                            self.rec_height/4 +
-                                                                                            self.rec_height *
-                                                                              (len(self.deques[self.E.index(e)]) -1 -j))
-                j -= 1
+        # Aktualisierung Plot
+        self.button_win.draw_new_positions(self.currentPos)
+        self.button_win.draw_new_queue_positions(self.deques)
+        self.button_win.redraw(theta)
 
-        plt.title('Theta = {}'.format(theta))  # setze neuen Titel des Plots
-        self.fig.canvas.draw()  # redraw
         return

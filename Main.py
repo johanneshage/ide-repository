@@ -29,10 +29,10 @@ class Main:
         :param y0_queue: Liste mit den Einflussgrößen des virtuellen Flusses, indiziert wie 'kanten_queue',
          'start_queue', 'ende_queue'
         """
-        if graph is None:
+        if graph is None:  # liest Graph aus "GraphenGEXF/myGraph.gexf", falls keiner in "Math/data.py" angegeben ist
             graph, posit = self.import_gexf_graph()
         else:
-            posit = None
+            posit = nx.shell_layout(graph)  # verwende vorgefertigtes Layout für angegebene Graphen
         app = Application(graph, R, ST, alpha, posit, variante, kanten_queue, start_queue, ende_queue, y0_queue)
         # starte 'app.runner()', diese Funktion sorgt für den wiederholten Aufruf von 'app.run()'
         app.button_win.after(1000, app.runner)
