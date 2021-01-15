@@ -3,47 +3,44 @@ from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 import networkx as nx
 from collections import deque
-from matplotlib.widgets import Button
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 import sys
 
 
 class ButtonWindowFrame(tk.Frame):
     """
-    Diese Klasse verwaltet die Button-Leiste am unteren Bidlschirmrand, mit den Buttons:
-    "Zurück", "Pause", bzw. "Fortsetzen", und "Weiter"
+    Diese Klasse verwaltet die Button-Leiste am unteren Bildschirmrand, mit den Buttons:
+    "Zurück", "Pause", bzw. "Fortsetzen", und "Weiter". Objekte werden erzeugt in der Initialisierung von
+    "Application.py".
     """
 
-    def __init__(self, E, V, I, ST, r, posit):
+    def __init__(self, E, V, ST, r, posit):
         """
-        Erzeugt Buttons und Layout der Button-Leiste
-        :param app: Objekt der Klasse "Application", wird übergeben, damit durch Klicken der Buttons auf die Haupt-
-         anwendung zugegriffen werden kann
+        Erzeugt Buttons und ersten Plot mit Spielern in deren Startknoten.
+        :param E: Liste der Kanten, benötigt u.a. für Positionen der Spieler
+        :param V: Liste der Knoten des Graphs
+        :param ST: Liste von Tupeln, wobei k-tes Tupel (i,j) beschreibt, dass Spieler k +1 Quelle s_i und Senke t_j
+         besitzt
+        :param r: Liste der Reisezeiten aller Kanten
+        :param posit: Knotenpositionen. Werden bestimmt/berechnet in "Main.py" und von dort an "Application.py"
+         übergeben
         """
         self.E = E.copy()
         self.V = V.copy()
-        self.I = I.copy()
         self.ST = ST.copy()
+        self.I = range(len(ST))
         self.r = r.copy()
-        self.master = tk.Tk()
+        self.master = tk.Tk(className="graph")
         self.fig = plt.figure(figsize=(3,3), dpi=100)
         self.ax = self.fig.add_subplot(111)
         plt.ylim(-1.5, 1.5)  # setzte Höhe des Plots, damit Rechtecke in jedem Plot gleich groß
         plt.xlim(-1.25, 1.25)
-        #self.app = app
         self.screenwidth = self.master.winfo_screenwidth()
         self.screenheight = self.master.winfo_screenheight()
-        #self.master.wm_attributes('-topmost', True)
-        #self.master.overrideredirect(True)
         self.master.geometry("{}x{}".format(int(self.screenwidth), int(self.screenheight)))
-        #self.master.config(background='black')
-        #self.master.update_idletasks()
-        #self.master.config(width = self.master.winfo_screenwidth(), height = self.master.winfo_screenheight()/6) #,
-        # background="#0000ee"
         super().__init__(self.master)
         self.master.protocol('WM_DELETE_WINDOW', sys.exit)  # beendet Programm bei Klicken des 'X'-Buttons
-        #self.pack()
-        #self.pack(fill="both", expand=True)
+
         canvas = FigureCanvasTkAgg(self.fig, master=self.master)
         #canvas.draw()
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
@@ -61,7 +58,7 @@ class ButtonWindowFrame(tk.Frame):
             if (name.startswith("s") or name.startswith("t")) and len(name) > 1:
                 try:
                     # bestimme Nummer des Start-/Zielknotens; ValueError, falls keine gültige Nummer vorhanden
-                    farbe = int(name[1:])
+                    farbe = int(name[1:])  # ValueError, falls "v" kein Start- oder Zielknoten ist
                     if name.startswith("s"):
                         # weise Quellknoten die jeweilige Farbe zu
                         self.colorMap.append("deepskyblue")
@@ -76,8 +73,9 @@ class ButtonWindowFrame(tk.Frame):
                     self.colorMap.append("paleturquoise")  # Standardfarbe für alle anderen Knoten
                     continue
             self.colorMap.append("paleturquoise")  # Standardfarbe für alle anderen Knoten
+
         for e in self.E:
-            self.graph.add_edge(e)
+            self.graph.add_edge(e[0], e[1])
 
         self.spieler = []  # Rechtecke für Spieler
         self.numbers = []  # Nummerierung der Spieler
@@ -97,27 +95,30 @@ class ButtonWindowFrame(tk.Frame):
         for e in self.E:
             self.spielerV.append(deque())
 
+        nx.draw(self.graph, self.posit, node_color=self.colorMap, with_labels=True, alpha=0.8)  # zeichnen des Graphen
+        plt.title('Theta = 0')  # setze Titel des Plots
+
         # erste Liste in "first" enthält alle vorkommenden Positionen, zweite Liste den Spieler mit kleinstem Index in
         # dieser Position
         first = [[], []]
         for i in self.I:  # Plot vor Start des Programms
-            currentPos = self.ST[i][0]  # Spieler befinden sich zum Zeitpunkt '0' in ihren Quellen
+            currentPos = 's{}'.format(self.ST[i][0])  # Spieler befinden sich zum Zeitpunkt '0' in ihren Quellen
             if currentPos not in first[0]:  # erster Spieler in Position "currentPos"
                 first[0].append(currentPos)
                 first[1].append(i)
-                self.spieler[i].set_xy(self.posit[currentPos]) # neue Position Spieler
+                self.spieler[i].set_xy(self.posit[currentPos])  # neue Position Spieler
                 self.numbers[i].set_x(self.posit[currentPos][0]+self.rec_width/3)  # neue Position Nummer
                 self.numbers[i].set_y(self.posit[currentPos][1]+self.rec_height/4)
             else:  # alle weiteren Spieler in Position "currentPos"
-                count = self.ST[:i][0].count(currentPos)
+                # zähle Spieler die sich in gleicher Position befinden wie Spieler "i" und kleineren Index haben
+                count = [s[0] for s in self.ST[:i]].count(int(currentPos[1:]))
+                # Koordinaten des ersten Spielers in gleicher Position wie Spieler "i"
                 x, y = self.spieler[first[1][first[0].index(currentPos)]].get_xy()
                 # setze Rechtecke der Spieler in gleicher Position übereinander
                 self.spieler[i].set_xy((x, y+count*self.rec_height))
                 self.numbers[i].set_x(x + self.rec_width/3)
                 self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
 
-        nx.draw(self.graph, self.posit, node_color=self.colorMap, with_labels=True, alpha=0.8)  # zeichnen des Graphen
-        plt.title('Theta = 0')  # setze Titel des Plots
         self.fig.canvas.draw()
 
         #toolbar = NavigationToolbar2Tk(canvas, self.master)
@@ -125,7 +126,6 @@ class ButtonWindowFrame(tk.Frame):
         #canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         #canvas.get_tk_widget().grid(row=1, column=1)
 
-        self.unpaused = False
         self.zeitpunkt = 0
 
         # Rahmen für die Buttons
@@ -151,7 +151,6 @@ class ButtonWindowFrame(tk.Frame):
         #self.prev.pack(padx = int(1/3 * self.screenwidth), pady = int(11/12 * self.screenheight))
         self.prev.pack(side=tk.BOTTOM, padx=0, pady=0)
         #self.prev.grid(row=2,column=1,sticky="we")
-        #button1_window = canvas.create_window(10, 10, anchor=NW, window=self.prev)
 
         # Button: Pause
         self.pause = tk.Button(canvas.get_tk_widget(), text="Pause", state="disabled")
@@ -175,7 +174,8 @@ class ButtonWindowFrame(tk.Frame):
 
     def redraw(self, theta):
         """
-        :param theta: Zeitpunkt der Zeichnung
+        Wird aufgerufen, um Plot zu aktualisieren
+        :param theta: Zeitpunkt des Plots
         :return: kein Rückgabewert
         """
         plt.title('Theta = {}'.format(theta))  # setze Titel des Plots
@@ -195,27 +195,23 @@ class ButtonWindowFrame(tk.Frame):
     def restore_players(self, positionenV, red_list):
         """
         Wird aufgerufen von "Application.back()". Spieler, die bei einem Rückwärtsschritt zurück in eine Warteschlange
-        kommen, müssen auch in Plot berücksichtigt werden: Viruelle Spieler werden an passende Position gesetzt, reale
+        kommen, müssen auch in Plot berücksichtigt werden: Virtuelle Spieler werden an passende Position gesetzt, reale
         Spieler werden rot gefärbt.
         :param positionenV: Liste welche die Reihenfolge der virtuellen Spieler enthält, in der diese gezeichnet werden
         :param red_list: Liste der realen Spieler, die rot gefärbt werden
         :return: kein Rückgabewert
         """
         for e in self.E:
-            for pos in positionenV:  # zeichne virtuelle Spieler
+            for pos in positionenV[self.E.index(e)]:  # zeichne virtuelle Spieler
                 self.spielerV[self.E.index(e)].append(Rectangle((0.91 * self.posit[e[0]][0] +
                                                                  0.09 * self.posit[e[1]][0],
                                                                  0.91 * self.posit[e[0]][1] +
-                                                                 0.09 * self.posit[e[1]][1] +
-                                                                 self.rec_height * pos),
-                                                                 self.rec_width,
-                                                                 self.rec_height,
-                                                                 linewidth=1,
-                                                                 edgecolor='black',
-                                                                 facecolor='white', alpha=0.5))
+                                                                 0.09 * self.posit[e[1]][1] + self.rec_height * pos),
+                                                                 self.rec_width, self.rec_height, linewidth=1,
+                                                                 edgecolor='black', facecolor='white', alpha=0.5))
                 self.ax.add_patch(self.spielerV[self.E.index(e)][-1])
         for out in red_list:  # Färbe Spieler in Warteschlange rot
-            self.spieler[self.spieler.index(out)].set_facecolor('red')
+            self.spieler[out[0]].set_facecolor('red')
         return
 
     def add_virtual_player(self, kante, deq_pos):
@@ -230,7 +226,7 @@ class ButtonWindowFrame(tk.Frame):
         self.spielerV[self.E.index(kante)].appendleft(
             Rectangle((0.91*self.posit[kante[0]][0] + 0.09*self.posit[kante[1]][0],
                        0.91 * self.posit[kante[0]][1] + 0.09*self.posit[kante[1]][1] + self.rec_height * deq_pos),
-                        self.rec_width, self.rec_height, linewidth=1, edgecolor='black', facecolor= 'white', alpha=0.5))
+                       self.rec_width, self.rec_height, linewidth=1, edgecolor='black', facecolor= 'white', alpha=0.5))
         # füge virtuellen Spieler zu Plot hinzu
         self.ax.add_patch(self.spielerV[self.E.index(kante)][0])
         return
@@ -244,7 +240,8 @@ class ButtonWindowFrame(tk.Frame):
         :return: kein Rückgabewert
         """
         for p in range(len(player_color)):
-            self.spieler[self.spieler.index(player_color[p])].set_facecolor(self.colors[t_index[p] % len(self.colors)])
+            player_index = player_color[p][0]
+            self.spieler[player_index].set_facecolor(self.colors[t_index[p] % len(self.colors)])
         return
 
     def updates(self, visibility, nex_config, prev_config):
@@ -305,22 +302,16 @@ class ButtonWindowFrame(tk.Frame):
             v.remove()  # entferne virtuellen Spieler aus plot
         return
 
-#nicht mehr benötigt?
-    """def set_player_position(self, i, position):
-        
-        aufgerufen von "Application.py", setzt Position des übergebenen Spielers für Plot
-        :param i: Index des Spielers
-        :param position: aktuelle Position des Spielers (bspw. in Knoten, Punkt im Durchlauf einer Kante, etc.)
-        :return: kein Rückgabewert
-        
-        # neue Position Spieler
-        self.spieler[i].set_xy(self.posit[position])
-        # neue Position Nummer
-        self.numbers[i].set_x(self.posit[position][0]+self.rec_width/3)
-        self.numbers[i].set_y(self.posit[position][1]+self.rec_height/4)
-        return"""
-
     def draw_new_positions(self, positions):
+        """
+        Dient dazu, Positionen aller realer Spieler, welche sich zum aktuellen Zeitpunkt nicht in einer Wartschlange
+        befinden, korrekt für den Plot zu setzen. (Für Spieler in Warteschlange siehe self.draw_new_queue_positions )
+        :param positions: Liste der Positionen aller Spieler, diese Funktion berücksichtigt nur 2 Fälle von möglichen
+        Positionen: 1. Spieler befindet sich in einem Knoten -> Position 'v'
+                    2. Spieler befindet sich auf einer Kante, aber nicht in deren Wartschlange -> Position '(e,k)',
+                       wobei 'e' Kante und 'k' > 0
+        :return: kein Rückgabewert
+        """
         # erste Liste in "first" enthält alle vorkommenden Positionen, zweite Liste den Spieler mit kleinstem Index in
         # dieser Position
         first = [[], []]
@@ -377,6 +368,12 @@ class ButtonWindowFrame(tk.Frame):
         return
 
     def draw_new_queue_positions(self, deques):
+        """
+        Dient dazu, Positionen aller Spieler (real + virtuell), die sich momentan in einer Wartschlange befinden, für
+        den Plot zu setzen. Für alle anderen Spieler, siehe "self.draw_new_positions".
+        :param deques: Liste aller aktuellen Warteschlangen
+        :return: kein Rückgabewert
+        """
         for e in self.E:  # setzen der Positionen von Spielern in Warteschlange
             j = len(deques[self.E.index(e)]) -1  # erster Index in der deque
             vcount = 0
@@ -391,20 +388,19 @@ class ButtonWindowFrame(tk.Frame):
                                                                    (len(deques[self.E.index(e)]) -1 -j)))
                     vcount += 1
                 except TypeError:
-                    deques[self.E.index(e)][j].set_facecolor('red')
+                    self.spieler[deques[self.E.index(e)][j][0]].set_facecolor('red')
                     # setze Position von Spieler "self.deques[self.E.index(e)][j]"
-                    self.spieler[self.spieler.index(deques[self.E.index(e)][j])].set_xy((0.91*self.posit[e[0]][0] +
-                                                                                              0.09*self.posit[e[1]][0],
-                                                                                              0.91*self.posit[e[0]][1] +
-                                                                                              0.09*self.posit[e[1]][1] +
+                    self.spieler[deques[self.E.index(e)][j][0]].set_xy((0.91*self.posit[e[0]][0] +
+                                                                              0.09*self.posit[e[1]][0],
+                                                                              0.91*self.posit[e[0]][1] +
+                                                                              0.09*self.posit[e[1]][1] +
                                                                 self.rec_height*(len(deques[self.E.index(e)]) -1 -j)))
-                    self.numbers[self.spieler.index(deques[self.E.index(e)][j])].set_x(0.91*self.posit[e[0]][0] +
-                                                                                            0.09*self.posit[e[1]][0] +
-                                                                                            self.rec_width/3)
-                    self.numbers[self.spieler.index(deques[self.E.index(e)][j])].set_y(0.91*self.posit[e[0]][1] +
-                                                                                            0.09*self.posit[e[1]][1] +
-                                                                                            self.rec_height/4 +
-                                                                                            self.rec_height *
-                                                                                (len(deques[self.E.index(e)]) -1 -j))
+                    self.numbers[deques[self.E.index(e)][j][0]].set_x(0.91*self.posit[e[0]][0] +
+                                                                            0.09*self.posit[e[1]][0] + self.rec_width/3)
+                    self.numbers[deques[self.E.index(e)][j][0]].set_y(0.91*self.posit[e[0]][1] +
+                                                                            0.09*self.posit[e[1]][1] +
+                                                                            self.rec_height/4 +
+                                                                            self.rec_height *
+                                                                            (len(deques[self.E.index(e)]) -1 -j))
                 j -= 1
         return

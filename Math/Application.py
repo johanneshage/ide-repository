@@ -1,8 +1,6 @@
 from Graphics.ButtonWindowFrame import ButtonWindowFrame
-from Graphics.AbfrageVirtuelleSpieler import AbfrageVirtuelleSpieler
 import numpy as np
 from collections import deque
-import sys
 
 
 class Application:
@@ -15,7 +13,8 @@ class Application:
         """
         Initialisiert Graph und alle Variablen, sowie Kantenkosten und erzeugt Plot zum Zeitpunkt 0 (vor eventuellem
         Hinzufügen weiterer virtueller Spieler durch "AbfrageVirtuelleSpieler.add_parameter()" ). Alle Eingabeparameter
-        außer "posit" und "variante" werden in "data.py" spezifiziert und haben folgende Funktion:
+        außer "posit" und "variante" werden in "data.py" spezifiziert, oder gegebenenfalls in "Main.py", und haben
+        folgende Funktion:
         :param G: Gerichteter Graph als Dictionary
         :param R: Liste aller Startzeitpunkte, indiziert in der Reihenfolge der Spieler
         :param ST: Liste von Tupeln, wobei k-tes Tupel (i,j) beschreibt, dass Spieler k +1 Quelle s_i und Senke t_j
@@ -26,12 +25,12 @@ class Application:
             alpha = 1: nur die Wartezeit bestimmt Kosten
             alpha = 1/2 (Standardwert): Reisedauer und Wartezeit nehmen gleichen Einfluss auf Kosten
         :param posit: Knotenpositionen, werden in "Main.py" zusammen mit dem Graphen aus Datei "myGraph.gexf"
-         eingelesen, falls in "data.py" kein Graph angegeben, Standardwert None
-        :param variante: gibt Variante zur Kostenberechnung an; Möglichkeiten: 'A', 'B', 'C', 'D'. Standardwert 'A'.
+         eingelesen, falls in "data.py" kein Graph angegeben
+        :param variante: gibt Variante zur Kostenberechnung an; Möglichkeiten: 'A', 'B', 'C', 'D'. Standardwert: 'A'.
         :param kanten_queue: Liste, die alle Kanten mit virtueller Warteschlange, als Tupel der Form ('v','w'), enthält
         :param start_queue: Liste die zu den Einträgen in "kanten_queue" die entsprechenden Startzeitpunkte des
          virtuellen Einflusses enthält (i-ter Eintrag in "start_queue" bezieht sich auf i-ten Eintrag in "kanten_queue"
-        :param ende_queue: Analog zu 'start_queue' ist dies eine Liste, die die Endzeitpunkte des virtuellen Einflusses
+        :param ende_queue: Analog zu "start_queue" ist dies eine Liste, die die Endzeitpunkte des virtuellen Einflusses
          enthält
         :param y0_queue: Liste mit den Einflussgrößen des virtuellen Flusses, indiziert wie "kanten_queue",
          "start_queue", "ende_queue"
@@ -70,42 +69,6 @@ class Application:
         self.items = G.items()
         self.keys = G.keys()
 
-        #self.screenwidth = self.fig.winfo_screenwidth()
-        #self.screenheight = self.fig.winfo_screenheight()
-        #self.fig.geometry("{}x{}".format(int(self.screenwidth), int(self.screenheight)))
-        #fig_manager = plt.get_current_fig_manager()
-        # fig_manager.full_screen_toggle()  # setze Plot auf Vollbild
-        #fig_manager.window.state('zoomed')  # maximiere Plot
-        #self.fig.Maximize(True)
-        #self.fig.show()  # zeige Plot an
-
-        #if posit is None:
-        #    self.posit = nx.shell_layout(G)  # Layout für Knotenpositionen
-        #else:
-        #    self.posit = posit  # falls graph aus gexf-datei importiert wurde, verwende auch dessen Layout
-
-        # beendet gesamtes Programm bei Klicken des 'x' - Buttons
-        #fig_manager.window.protocol('WM_DELETE_WINDOW', sys.exit)
-
-        #newpath = "GraphenGEXF"
-        #if not os.path.exists(newpath):
-        #    os.makedirs(newpath)
-        #nx.write_gexf(graph, "GraphenGEXF\g1.gexf")
-        #data = nx.readwrite.json_graph.node_link_data(graph)
-        #with open('g1.json', 'w') as json_file:
-        #    json.dump(data, json_file, indent=4, sort_keys=True)
-        '''def read_json_file(filename):
-            caps = []
-            trav = []
-            with open(filename) as f:
-                json_string = json.load(f)
-            for e in json_string["edgevalues"]:
-                caps.append(e["capacity"])
-                trav.append(e["traveltime"])
-            graph = json_graph.node_link_graph(json_string)
-            return graph, list(graph.nodes), list(graph.edges), caps, trav
-        print(read_json_file('person.json'))'''
-
         for delta in self.items:
             for w in list(delta[1].keys()):
                 self.E.append((delta[0], w))  # speichere alle Kanten in E
@@ -119,24 +82,11 @@ class Application:
         self.graphReversed = self.reverse_graph(G)
 
         self.fm.append(self.num*[None])  # Initialisierung "self.fm" für alle Spieler
-        self.currentPos = self.ST[:][0]   # Initialisierung "self.currentPos" -> Spieler befinden sich in Quellen
+        self.currentPos = []
+        for i in self.I:  # Initialisierung "self.currentPos" -> Spieler befinden sich in Quellen
+            self.currentPos.append('s{}'.format(self.ST[i][0]))
 
         self.c.append(np.zeros((self.num, self.m)))
-        # gibt es eine virtuelle Queue beginnend bei theta = 0, so muss diese bei der Initialisierung von "self.c"
-        # beachtet werden
-        if 0 in self.start_queue:
-            anfang = self.start_queue.index(0)
-            while True:
-                try:
-                    # "index" durchläuft alle Indizes von in "start_queue" vorkommenden 0ern
-                    index = self.start_queue[anfang:].index(0) + anfang
-                except ValueError:  # alle 0er durchlaufen
-                    break
-                for i in self.I:
-                    # setzen der Warteschlangenlängen durch virtuelle Spieler
-                    self.c[0][i][self.E.index(self.kanten_queue[index])] += self.y0_queue[index]
-                anfang += 1
-
         for i in self.I:  # Initialisierung "self.c" (Kosten)
             if variante == 'A':
                 for e in self.E:
@@ -174,12 +124,11 @@ class Application:
                                                         (self.c[0][i][self.E.index(e)]/float(self.nu[self.E.index(e)]))\
                                                         + self.r[self.E.index(e)]
 
-        self.button_win = ButtonWindowFrame(self.E, self.V, self.I, self.ST, self.r, posit)  # erzeuge Buttonleiste
+        self.button_win = ButtonWindowFrame(self.E, self.V, self.ST, self.r, posit)  # erzeuge Buttonleiste
         # weise Buttons Funktionen zu
         self.button_win.prev.configure(command=self.back)
         self.button_win.pause.configure(command=self.pause)
         self.button_win.nex.configure(command=self.weiter)
-        AbfrageVirtuelleSpieler(self)  # erzeuge Abfragefenster
 
     def runner(self):
         """
@@ -198,13 +147,8 @@ class Application:
                 # Vergrößere Liste "self.leaveQueue", falls nötig (also falls "self.run(self.button_win.get_zeit() + 1)"
                 # vorher noch nicht aufgerufen wurde)
                 if len(self.leaveQueue) < self.zeitpunkt + 2:
-                    init_p = []
-                    init_m = []
-                    for i in self.I:
-                        init_p.append(None)
-                        init_m.append(None)
-                    self.fm.append(init_m)
-                    self.fp.append(init_p)
+                    self.fm.append(self.num * [None])
+                    self.fp.append(self.num * [None])
                     self.leaveQueue.append([])
                 self.zeitpunkt += 1
                 self.run(self.zeitpunkt)
@@ -262,7 +206,7 @@ class Application:
             else:
                 insert -= 1
         for t in reversed(range(insert, theta)):
-            if self.button_win.spieler[i] in self.leaveQueue[t][self.E.index(e)]:
+            if (i, 'r') in self.leaveQueue[t][self.E.index(e)]:
                 return e, theta - t  # Fall 2
         return e, 0  # Fall 3
 
@@ -312,8 +256,7 @@ class Application:
                 raise TypeError('C fehlt noch')
             # wie Variante 'A', mit dem Unterschied, dass Wartezeiten aufgerundet werden, da diskretes Modell
             elif var == 'D':
-                wartezeit[self.E.index(e)] = math.ceil(len(self.deques[self.E.index(e)]) /
-                                                       float(self.nu[self.E.index(e)]))
+                wartezeit[self.E.index(e)] = np.ceil(len(self.deques[self.E.index(e)]) /float(self.nu[self.E.index(e)]))
             else:
                 raise TypeError('Ungültige Variante')
 
@@ -422,7 +365,7 @@ class Application:
         :return: Kein Rückgabewert
         """
         if self.unpaused:
-            self.unpaused  = False
+            self.unpaused = False
             self.button_win.set_pause_text("Fortsetzen")
         else:
             self.unpaused = True
@@ -438,8 +381,8 @@ class Application:
          Positionen neu berechnet und entsprechend anpasst.
         :return: Kein Rückgabewert
         """
-        positionenV = []
-        red_list = []
+        positionenV = []  # für graphischen Teil
+        red_list = []  # für graphischen Teil
         for e in self.E:
             positionenV.append([])
             # füge Spieler wieder zu Queue hinzu
@@ -447,17 +390,17 @@ class Application:
                 try:
                     int(out)  # TypeError, falls "out" KEIN virtueller Spieler
                     self.deques[self.E.index(e)].append(out)  # virtuelle Spieler wieder zur Queue hinzufügen
-                    positionenV.append(len(self.deques[self.E.index(e)]) -1)  # merke Positionen virtueller Spieler
-                    # in Warteschlange -> werden an 'button_win' übergeben
+                    positionenV[self.E.index(e)].append(len(self.deques[self.E.index(e)]) -1)  # merke Positionen
+                    # virtueller Spieler in Warteschlange -> werden an "self.button_win" übergeben
                     continue
                 except TypeError:  # nicht-virtueller Spieler
-                    position = self.pos(self.button_win.spieler.index(out), self.zeitpunkt -1)
+                    position = self.pos(out[0], self.zeitpunkt -1)
                     if position not in self.V:  # prüfe, ob Spieler zuvor in Warteschlange war
                         # falls ja, wird er wieder hinzugefügt
                         self.deques[self.E.index(position[0])].append(out)
                         red_list.append(out)  # merke Spieler, deren Farbe auf rot gesetzt werden soll
 
-            self.button_win.restore_players(positionenV, red_list)  # graphische Umsetzung des Obigen
+        self.button_win.restore_players(positionenV, red_list)  # graphische Umsetzung des Obigen
 
         # speichere Spieler und deren neue Farbe in Liste, zur Übergabe an 'self.button_win'
         player_recolor = []
@@ -484,15 +427,15 @@ class Application:
                 except TypeError:  # "latest" ist realer Spieler
                     # prüft, ob Spieler "latest" sich im Startknoten von "e" befindet, also die deque genau zu
                     # "self.zeitpunkt" betreten hat und entfernt werden muss
-                    if self.pos(self.button_win.spieler.index(latest), self.zeitpunkt) == e[0]:
+                    if self.pos(latest[0], self.zeitpunkt) == e[0]:
                         continue
                     # prüft, ob Spieler "latest" Kante "e" zum Zeitpunkt "self.zeitpunkt-1" betreten hat
-                    elif self.fp[self.zeitpunkt-1][self.button_win.spieler.index(latest)] == e:
+                    elif self.fp[self.zeitpunkt-1][latest[0]] == e:
                         # wenn ja, umfärben von rot auf ursprüngliche Farbe und weiter mit nächstem Spieler
                         # merke Spieler
                         player_recolor.append(latest)
                         # merke Index des Zielknoten dieses Spielers, zur Bestimmung der Farbe
-                        t_index.append(self.ST[self.button_win.spieler.index(latest)][1]-1)
+                        t_index.append(self.ST[latest[0]][1]-1)
                         continue
                     else:
                         self.deques[self.E.index(e)].appendleft(latest)  # wenn nein, Abbruch
@@ -500,7 +443,6 @@ class Application:
 
         # umfärben
         self.button_win.change_color(player_recolor, t_index)
-        self.zeitpunkt -= 1
         # Informationen für graphischen Teil
         visibility = []
         nex_config = False
@@ -513,12 +455,14 @@ class Application:
         if self.button_win.nex['state'] == 'disabled':
             nex_config = True
             self.button_win.after(1000, self.runner)  # runner neustarten, da Programm bereits terminiert hat
-        self.runback(self.zeitpunkt)
+        self.zeitpunkt -= 1
         if self.zeitpunkt == 0:
             prev_config = True
 
         # visuelle updates
         self.button_win.updates(visibility, nex_config, prev_config)
+
+        self.runback(self.zeitpunkt)
 
         return
 
@@ -546,7 +490,7 @@ class Application:
         """
         Führt einen Vorwärtsschritt aus, zeigt also die Positionen aller Spieler zum Zeitpunkt "theta". Dazu wird
         erst bestimmt, ob die Funktion "run" bereits mit genau diesem "theta" zuvor schon aufgerufen wurde
-        ("rerun"=True), oder nicht ("rerun"=False"). Im Falle eines reruns müssen nämlich die Distanzen und die Werte
+        ("rerun"=True), oder nicht ("rerun"=False). Im Falle eines reruns müssen nämlich die Distanzen und die Werte
         für f^+, f^- nicht erneut berechnet werden, da diese bereits im ersten Aufruf von "run(theta)" bestimmt wurden.
         In beiden Fällen werden die Warteschlangen an den Zeitpunkt "theta" angepasst, sowie der Plot aktualisiert.
         :param theta: aktueller Zeitpunkt
@@ -575,10 +519,6 @@ class Application:
                         else:
                             newDists.append(self.dijkstra(self.graphReversed, "t{}".format(self.ST[i][1]),
                                                           self.currentPos[i],i,theta,visited=[], distances={}))
-                    elif self.currentPos[i][1] == 0:
-                        # befindet sich Spieler "i" momentan auf einer Kante, so werden seine Labels nicht benötigt und
-                        # daher auch nicht berechnet, um Rechenzeit zu sparen
-                        newDists.append(self.n*[None])
                     else:
                         # befindet sich Spieler "i" momentan auf einer Kante, so werden seine Labels nicht benötigt und
                         # daher auch nicht berechnet, um Rechenzeit zu sparen
@@ -626,7 +566,7 @@ class Application:
         player_recolor = []
         t_index = []
         for e in self.E:  # bestimme aktuelle Queue für jede Kante
-            if not rerun:
+            if not rerun and theta > 0:
                 self.leaveQueue[theta -1].append([])
             residualCap[self.E.index(e)] -= min(len(self.deques[self.E.index(e)]), self.nu[self.E.index(e)])
             for out in range(min(len(self.deques[self.E.index(e)]), self.nu[self.E.index(e)])):
@@ -639,8 +579,8 @@ class Application:
                 except TypeError:
                     # merke umzufärbende Spieler
                     player_recolor.append(nextPlayer)
-                    # merke Index des Zielknoten dieses Spielers, zur Bestimmung der Farbe
-                    t_index.append(self.ST[self.button_win.spieler.index(nextPlayer)][1]-1)
+                    # merke Nummer des Zielknoten dieses Spielers, zur Bestimmung der Farbe
+                    t_index.append(self.ST[nextPlayer[0]][1]-1)
             if theta > 0:
                 for i in self.I:
                     if self.fp[theta-1][i] == e:

@@ -19,7 +19,7 @@ Enthält die für die Erzeugung eines Objekts der Klasse "Main" notwendigen Para
 """
 
 
-'''R = 3*[0]+2*[1] + 2*[2] +2*[3] + [4]
+R = 3*[0]+2*[1] + 2*[2] +2*[3] + [4]
 # i-tes Tupel enthält Nummer des Start- und des Endknotens von Spieler i
 ST = [(1, 1), (1, 2)] + 3*[(2, 1)] + [(2, 2), (1, 1), (1, 2), (1, 1), (2, 1)]
 alpha = 10*[1/2]
@@ -27,14 +27,14 @@ variante = 'A'
 kanten_queue = [('w', 't1'), ('w', 'v')]  # virtuelle Warteschlange
 start_queue = [2, 2]  # Startzeitpunkt des virtuellen Einflusses
 ende_queue = [3, 2]  # Endzeitpunkt des virtuellen Einflusses
-y0_queue = [4, 4]  # Menge des virtuellen Einflusses'''
+y0_queue = [4, 4]  # Menge des virtuellen Einflusses
 
-R = 2*[0]
-ST= 2*[(1,1)]
+#R = 2*[0]
+#ST= 2*[(1,1)]
 
 
 # graph, falls kein Graph spezifiziert, so wird Graph aus Datei "GraphenGEXF/myGraph.gexf" eingelesen
-'''graph = {'s1': {'v': (1,2), 'w': (1,1)},
+graph = {'s1': {'v': (1,2), 'w': (1,1)},
          's2': {'u': (3,5)},
          'v': {'t1': (2,7)},
          'w': {'v': (2,1), 't1': (2,6)},
@@ -42,4 +42,4 @@ ST= 2*[(1,1)]
          'x': {'t1': (1,3), 't2': (1,4)},
          't1': {'t2': (2,1)},
          't2': {}
-         }'''
+         }
