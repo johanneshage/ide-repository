@@ -3,7 +3,7 @@ from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 import networkx as nx
 from collections import deque
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import sys
 
 
@@ -37,14 +37,10 @@ class ButtonWindowFrame(tk.Frame):
         plt.xlim(-1.25, 1.25)
         self.screenwidth = self.master.winfo_screenwidth()
         self.screenheight = self.master.winfo_screenheight()
-        self.master.geometry("{}x{}".format(int(self.screenwidth), int(self.screenheight)))
+        self.master.geometry("{}x{}".format(int(self.screenwidth), int(self.screenheight) -100))
         super().__init__(self.master)
         self.master.protocol('WM_DELETE_WINDOW', sys.exit)  # beendet Programm bei Klicken des 'X'-Buttons
-
-        canvas = FigureCanvasTkAgg(self.fig, master=self.master)
-        #canvas.draw()
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.master)
 
         self.colorMap = []
         # Farben werden für unterschiedliche Zielknoten verwendet (gibt es mehr Zielknoten als "len(self.colors)", so
@@ -95,9 +91,6 @@ class ButtonWindowFrame(tk.Frame):
         for e in self.E:
             self.spielerV.append(deque())
 
-        nx.draw(self.graph, self.posit, node_color=self.colorMap, with_labels=True, alpha=0.8)  # zeichnen des Graphen
-        plt.title('Theta = 0')  # setze Titel des Plots
-
         # erste Liste in "first" enthält alle vorkommenden Positionen, zweite Liste den Spieler mit kleinstem Index in
         # dieser Position
         first = [[], []]
@@ -119,41 +112,23 @@ class ButtonWindowFrame(tk.Frame):
                 self.numbers[i].set_x(x + self.rec_width/3)
                 self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
 
-        self.fig.canvas.draw()
-
-        #toolbar = NavigationToolbar2Tk(canvas, self.master)
-        #toolbar.update()
-        #canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        #canvas.get_tk_widget().grid(row=1, column=1)
-
         self.zeitpunkt = 0
 
         # Rahmen für die Buttons
-        button_frame = tk.Frame(self)
-        #button_frame.grid(row=0, column=0, sticky="n")
-        #button_frame.pack(fill=None, expand=True, side=tk.TOP, padx=int(self.screenwidth/8))
-        #button_frame.pack(fill=None, padx=int(self.screenwidth/8))
-        # button_frame.config(background="#0000ee")
-        # self.master.update_idletasks()
-        #self.framewidth = button_frame.winfo_width()
-        #self.frameheight = button_frame.winfo_height()
-        # button_frame.update()
-        # self.master.update_idletasks()
+        button_frame = tk.Frame(self.master)
 
         # Button: Zurück
-        self.prev = tk.Button(canvas.get_tk_widget(), text="Zurück", state="disabled")
+        self.prev = tk.Button(button_frame, text="Zurück", state="disabled")
         #self.prev["bg"] = "#14ADA0"  # Farbe
         #self.prev["fg"] = "#FFFFFF"  # Schriftfarbe: weiß
         self.prev["relief"] = "flat"
         self.prev["height"] = 2
         self.prev["width"] = 19
         self.prev["font"] = "Arial 12 bold"
-        #self.prev.pack(padx = int(1/3 * self.screenwidth), pady = int(11/12 * self.screenheight))
-        self.prev.pack(side=tk.BOTTOM, padx=0, pady=0)
-        #self.prev.grid(row=2,column=1,sticky="we")
+        self.prev.pack(side=tk.LEFT, padx=0, pady=0)
 
         # Button: Pause
-        self.pause = tk.Button(canvas.get_tk_widget(), text="Pause", state="disabled")
+        self.pause = tk.Button(button_frame, text="Pause", state="disabled")
         #self.pause["bg"] = "#1894CE"
         #self.pause["fg"] = "#FFFFFF"
         self.pause["relief"] = "flat"
@@ -163,14 +138,19 @@ class ButtonWindowFrame(tk.Frame):
         self.pause.pack(side=tk.LEFT, padx=0, pady=0)
 
         # Button: Weiter
-        self.nex = tk.Button(canvas.get_tk_widget(), text="Weiter", state="disabled")
+        self.nex = tk.Button(button_frame, text="Weiter", state="disabled")
         #self.nex["bg"] = "#14ADA0"  # Farbe
         #self.nex["fg"] = "#FFFFFF"  # Schriftfarbe: weiß
         self.nex["relief"] = "flat"  # entfernt Rand
         self.nex["height"] = 2
         self.nex["width"] = 19
         self.nex["font"] = "Arial 12 bold"
-        self.nex.pack(side=tk.RIGHT, padx=0, pady=0)
+        self.nex.pack(side=tk.LEFT, padx=0, pady=0)
+
+        button_frame.pack(side=tk.BOTTOM)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        nx.draw(self.graph, self.posit, node_color=self.colorMap, with_labels=True, alpha=0.8)  # zeichnen des Graphen
+        plt.title('Theta = 0')  # setze Titel des Plots
 
     def redraw(self, theta):
         """
