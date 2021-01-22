@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 import Math.data as data
 from Math.Application import Application
+from Graphics.AbfrageVirtuelleSpieler import AbfrageVirtuelleSpieler
 from shutil import copyfile
 
 
@@ -29,14 +30,29 @@ class Main:
         :param y0_queue: Liste mit den Einflussgrößen des virtuellen Flusses, indiziert wie 'kanten_queue',
          'start_queue', 'ende_queue'
         """
-        if graph is None:
-            graph, posit = self.import_gexf_graph()
+        self.R = R
+        self.ST = ST
+        self.alpha = alpha
+        self.variante = variante
+        self.kanten_queue = kanten_queue
+        self.start_queue = start_queue
+        self.ende_queue = ende_queue
+        self.y0_queue = y0_queue
+
+        if graph is None:  # liest Graph aus "GraphenGEXF/myGraph.gexf", falls keiner in "Math/data.py" angegeben ist
+            self.graph, self.posit = self.import_gexf_graph()
         else:
-            posit = None
-        app = Application(graph, R, ST, alpha, posit, variante, kanten_queue, start_queue, ende_queue, y0_queue)
-        # starte 'app.runner()', diese Funktion sorgt für den wiederholten Aufruf von 'app.run()'
-        app.button_win.after(1000, app.runner)
-        app.button_win.mainloop()
+            self.graph = graph
+            self.posit = nx.shell_layout(self.graph)  # verwende vorgefertigtes Layout für angegebene Graphen
+
+        # erzeuge Anwendung
+        self.app = Application(self.graph, self.R, self.ST, self.alpha, self.posit, self.variante, self.kanten_queue,
+                               self.start_queue, self.ende_queue, self.y0_queue)
+
+        self.query = AbfrageVirtuelleSpieler(self.app.button_win.master, self.app.E)  # erzeuge Abfragefenster
+        self.query.btn_start.configure(command=self.start_runner)
+
+        self.app.button_win.mainloop()
 
     @staticmethod
     def import_gexf_graph():
@@ -88,6 +104,30 @@ class Main:
             posit[nodes[v]['label']][0] = posit[nodes[v]['label']][0]/x_max
             posit[nodes[v]['label']][1] = posit[nodes[v]['label']][1]/y_max
         return graph, posit
+
+    def start_runner(self):
+        """
+        Funktion zum Starten der Anwendung "self.app". Wird dem Button "btn_start" des Abfragefensters zugewiesen.
+        Fügt der Anwendung "self.app" alle über das Abfragefenster "self.query" eingelesenen Daten virtueller Spieler
+        hinzu.
+        :return: Kein Rückgabewert
+        """
+        for v in range(len(self.query.add_at)):  # aktualisiere Listen der Daten für virtuelle Spieler
+            self.app.kanten_queue.append(self.query.add_at[v])
+            self.app.start_queue.append(self.query.add_start[v])
+            self.app.ende_queue.append(self.query.add_end[v])
+            self.app.y0_queue.append(self.query.add_y0[v])
+
+        # aktiviere alle Buttons
+        self.app.button_win.prev.config(state="normal")
+        self.app.button_win.pause.config(state="normal")
+        self.app.button_win.nex.config(state="normal")
+        self.app.run(0)  # Fluss zum Zeitpunkt 0 nach eventuellem Einfügen virtueller Spieler
+        # starte 'app.runner()', diese Funktion sorgt für den wiederholten Aufruf von 'app.run()'
+        self.app.button_win.after(1000, self.app.runner)
+        self.query.abfrage.destroy()
+        self.app.unpaused = True
+        return
 
 
 def main():
