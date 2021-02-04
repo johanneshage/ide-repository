@@ -1,6 +1,7 @@
 from Graphics.ButtonWindowFrame import ButtonWindowFrame
 import numpy as np
 from collections import deque
+#import time
 
 
 class Application:
@@ -511,7 +512,7 @@ class Application:
 
         if not rerun:
             for i in self.I:
-                if self.z[i] == -1:
+                if self.z[i] == -1 and self.R[i] <= theta:
                     if self.currentPos[i] in self.V:
                         if theta > 0:
                             newDists.append(self.dijkstra(self.graphReversed, "t{}".format(self.ST[i][1]),
@@ -520,8 +521,9 @@ class Application:
                             newDists.append(self.dijkstra(self.graphReversed, "t{}".format(self.ST[i][1]),
                                                           self.currentPos[i],i,theta,visited=[], distances={}))
                     else:
-                        # befindet sich Spieler "i" momentan auf einer Kante, so werden seine Labels nicht benötigt und
-                        # daher auch nicht berechnet, um Rechenzeit zu sparen
+                        # befindet sich Spieler "i" momentan auf einer Kante, oder ist sein Startzeitpunkt noch nicht
+                        # erreicht, so werden seine Labels nicht benötigt und daher auch nicht berechnet, um Rechenzeit
+                        # zu sparen
                         newDists.append(self.n*[None])
                 else:
                     # ist Spieler "i" bereits bei seiner Senke angekommen, so werden die Labels nicht benötigt

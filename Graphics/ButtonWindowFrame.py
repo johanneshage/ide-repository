@@ -5,6 +5,7 @@ import networkx as nx
 from collections import deque
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import sys
+#import time
 
 
 class ButtonWindowFrame(tk.Frame):
@@ -94,23 +95,49 @@ class ButtonWindowFrame(tk.Frame):
         # erste Liste in "first" enthält alle vorkommenden Positionen, zweite Liste den Spieler mit kleinstem Index in
         # dieser Position
         first = [[], []]
+        # erste Liste in "last_pos" enthält für jede vorkommende Position, falls vorhanden, die Position des letzten
+        # Spielers im Plot (alle Spieler darüber passen nicht mehr hinein und werden nicht angezeigt). Zweite Liste
+        # enthält den Spielerindex des letzten Spielers in dieser Position (!= letzter im Plot), dieser soll im Plot
+        # angezeigt werden, und andeuten, dass alle Spieler bis zu diesem letzten Spieler in der Warteschlange sind,
+        # aber aus Platzgründen nicht angezeigt werden.
+        last_pos = [[], []]
         for i in self.I:  # Plot vor Start des Programms
             currentPos = 's{}'.format(self.ST[i][0])  # Spieler befinden sich zum Zeitpunkt '0' in ihren Quellen
             if currentPos not in first[0]:  # erster Spieler in Position "currentPos"
                 first[0].append(currentPos)
                 first[1].append(i)
+                last_pos[0].append(None)
+                last_pos[1].append(None)
                 self.spieler[i].set_xy(self.posit[currentPos])  # neue Position Spieler
-                self.numbers[i].set_x(self.posit[currentPos][0]+self.rec_width/3)  # neue Position Nummer
+                self.numbers[i].set_x(self.posit[currentPos][0]+self.rec_width/4)  # neue Position Nummer
                 self.numbers[i].set_y(self.posit[currentPos][1]+self.rec_height/4)
             else:  # alle weiteren Spieler in Position "currentPos"
                 # zähle Spieler die sich in gleicher Position befinden wie Spieler "i" und kleineren Index haben
                 count = [s[0] for s in self.ST[:i]].count(int(currentPos[1:]))
                 # Koordinaten des ersten Spielers in gleicher Position wie Spieler "i"
                 x, y = self.spieler[first[1][first[0].index(currentPos)]].get_xy()
-                # setze Rechtecke der Spieler in gleicher Position übereinander
-                self.spieler[i].set_xy((x, y+count*self.rec_height))
-                self.numbers[i].set_x(x + self.rec_width/3)
-                self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
+                if y + count*self.rec_height < 1.45:  # prüfe, ob Spieler in den Plot passt
+                    # setze Rechtecke der Spieler in gleicher Position übereinander
+                    self.spieler[i].set_xy((x, y+count*self.rec_height))
+                    self.numbers[i].set_x(x + self.rec_width/4)
+                    self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
+                else:  # falls nicht, so wird er auch nicht gezeichnet
+                    if last_pos[0][first[0].index(currentPos)] is None:
+                        last_pos[0][first[0].index(currentPos)] = (x, y + count*self.rec_height)
+                        last_pos[1][first[0].index(currentPos)] = i
+                    else:
+                        last_pos[1][first[0].index(currentPos)] = i
+                    self.spieler[i].set_visible(False)
+                    self.numbers[i].set_visible(False)
+
+        for last in last_pos[1]:
+            if last is not None:
+                x, y = last_pos[0][last_pos[1].index(last)]
+                self.spieler[last].set_xy((x, y))
+                self.numbers[last].set_x(x + self.rec_width/4)
+                self.numbers[last].set_y(y + self.rec_height/4)
+                self.spieler[last].set_visible(True)
+                self.numbers[last].set_visible(True)
 
         self.zeitpunkt = 0
 
@@ -132,8 +159,8 @@ class ButtonWindowFrame(tk.Frame):
         #self.pause["bg"] = "#1894CE"
         #self.pause["fg"] = "#FFFFFF"
         self.pause["relief"] = "flat"
-        self.pause["height"] = 2
-        self.pause["width"] = 19
+        #self.pause["height"] = 2
+        #self.pause["width"] = 19
         self.pause["font"] = "Arial 12 bold"
         self.pause.pack(side=tk.LEFT, padx=0, pady=0)
 
@@ -293,8 +320,14 @@ class ButtonWindowFrame(tk.Frame):
         :return: kein Rückgabewert
         """
         # erste Liste in "first" enthält alle vorkommenden Positionen, zweite Liste den Spieler mit kleinstem Index in
-        # dieser Position
-        first = [[], []]
+        # dieser Position, dritte Liste die momentane Anzahl Spieler in dieser Position
+        first = [[], [], []]
+        # erste Liste in "last_pos" enthält für jede vorkommende Position, falls vorhanden, die Position des letzten
+        # Spielers im Plot (alle Spieler darüber passen nicht mehr hinein und werden nicht angezeigt). Zweite Liste
+        # enthält den Spielerindex des letzten Spielers in dieser Position (!= letzter im Plot), dieser soll im Plot
+        # angezeigt werden, und andeuten, dass alle Spieler bis zu diesem letzten Spieler in der Warteschlange sind,
+        # aber aus Platzgründen nicht angezeigt werden.
+        last_pos = [[], []]
         for i in self.I:
             if positions[i] == "t{}".format(self.ST[i][1]):  # Spieler werden nicht mehr angezeigt, wenn Senke erreicht
                 self.spieler[i].set_visible(False)
@@ -304,27 +337,45 @@ class ButtonWindowFrame(tk.Frame):
                     if positions[i] not in first[0]:
                         first[0].append(positions[i])
                         first[1].append(i)
+                        first[2].append(0)
+                        last_pos[0].append(None)
+                        last_pos[1].append(None)
                         # neue Position Spieler
                         self.spieler[i].set_xy(self.posit[positions[i]])
                         # neue Position Nummer
-                        self.numbers[i].set_x(self.posit[positions[i]][0]+self.rec_width/3)
+                        self.numbers[i].set_x(self.posit[positions[i]][0]+self.rec_width/4)
                         self.numbers[i].set_y(self.posit[positions[i]][1]+self.rec_height/4)
+                        self.spieler[i].set_visible(True)
+                        self.numbers[i].set_visible(True)
                     else:
-                        # zähle Spieler in gleicher Position mit kleinerem Index
-                        count = positions[:i].count(positions[i])
-                        # ziehe Spieler die an ihrem Zielknoten angekommen (und nicht sichtbar) sind, ab
-                        for sp in self.I[:i]:
-                            if positions[sp] == positions[i] and positions[sp] == "t{}".format(self.ST[sp][1]):
-                                count -= 1
+                        pos = first[0].index(positions[i])
+                        first[2][pos] += 1  # zählt Spieler welche sich momentan in Position "positions[i]" befinden
+                        count = first[2][pos]
                         x, y = self.spieler[first[1][first[0].index(positions[i])]].get_xy()
-                        # setze Rechtecke der Spieler in gleicher Position übereinander
-                        self.spieler[i].set_xy((x, y+count*self.rec_height))
-                        self.numbers[i].set_x(x + self.rec_width/3)
-                        self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
+                        if y+count*self.rec_height < 1.45:  # prüfe, ob Spieler noch in den Plot passt
+                            # setze Rechtecke der Spieler in gleicher Position übereinander
+                            self.spieler[i].set_xy((x, y+count*self.rec_height))
+                            self.numbers[i].set_x(x + self.rec_width/4)
+                            self.numbers[i].set_y(y+count*self.rec_height + self.rec_height/4)
+                            self.spieler[i].set_visible(True)
+                            self.numbers[i].set_visible(True)
+                        else:  # Spieler passt nicht in den Plot
+                            # merke letzten Spieler in dieser Position, um anzudeuten, wie viele Spieler sich noch in
+                            # dieser Position befinden
+                            if last_pos[0][first[0].index(positions[i])] is None:
+                                last_pos[0][first[0].index(positions[i])] = (x, y + count*self.rec_height)
+                                last_pos[1][first[0].index(positions[i])] = i
+                            else:
+                                last_pos[1][first[0].index(positions[i])] = i
+                            self.spieler[i].set_visible(False)
+                            self.numbers[i].set_visible(False)
                 elif positions[i][1] != 0:
                     if positions[i] not in first[0]:
                         first[0].append(positions[i])
                         first[1].append(i)
+                        first[2].append(0)
+                        last_pos[0].append(None)
+                        last_pos[1].append(None)
                         self.spieler[i].set_xy((1-positions[i][1]/self.r[self.E.index(positions[i][0])]) *
                                                self.posit[positions[i][0][0]] +
                                                (positions[i][1]/self.r[self.E.index(positions[i][0])]) *
@@ -332,19 +383,47 @@ class ButtonWindowFrame(tk.Frame):
                         self.numbers[i].set_x(((1-positions[i][1]/self.r[self.E.index(positions[i][0])]) *
                                                self.posit[positions[i][0][0]] +
                                                (positions[i][1]/self.r[self.E.index(positions[i][0])]) *
-                                               self.posit[positions[i][0][1]])[0]+self.rec_width/3)
+                                               self.posit[positions[i][0][1]])[0]+self.rec_width/4)
                         self.numbers[i].set_y(((1-positions[i][1]/self.r[self.E.index(positions[i][0])]) *
                                                self.posit[positions[i][0][0]] +
                                                (positions[i][1]/self.r[self.E.index(positions[i][0])]) *
                                                self.posit[positions[i][0][1]])[1]+self.rec_height/4)
+                        self.spieler[i].set_visible(True)
+                        self.numbers[i].set_visible(True)
                     else:
-                        count = positions[:i].count(positions[i])
+                        pos = first[0].index(positions[i])
+                        first[2][pos] += 1  # zählt Spieler welche sich momentan in Position "positions[i]" befinden
+                        count = first[2][pos]
                         # Koordinaten des ersten Spielers
                         x, y = self.spieler[first[1][first[0].index(positions[i])]].get_xy()
-                        # setze Rechtecke der Spieler in gleicher Position übereinander
-                        self.spieler[i].set_xy((x,y+count*self.rec_height))
-                        self.numbers[i].set_x(x+self.rec_width/3)
-                        self.numbers[i].set_y(y+count*self.rec_height+self.rec_height/4)
+                        if y+count*self.rec_height < 1.45:  # prüfe, ob Spieler noch in den Plot passt
+                            # setze Rechtecke der Spieler in gleicher Position übereinander
+                            self.spieler[i].set_xy((x,y+count*self.rec_height))
+                            self.numbers[i].set_x(x+self.rec_width/4)
+                            self.numbers[i].set_y(y+count*self.rec_height+self.rec_height/4)
+                            self.spieler[i].set_visible(True)
+                            self.numbers[i].set_visible(True)
+                        else:  # Spieler passt nicht in den Plot
+                            # merke letzten Spieler in dieser Position, um anzudeuten, wie viele Spieler sich noch in
+                            # dieser Position befinden
+                            if last_pos[0][first[0].index(positions[i])] is None:
+                                last_pos[0][first[0].index(positions[i])] = (x, y + count*self.rec_height)
+                                last_pos[1][first[0].index(positions[i])] = i
+                            else:
+                                last_pos[1][first[0].index(positions[i])] = i
+                            self.spieler[i].set_visible(False)
+                            self.numbers[i].set_visible(False)
+
+        # zeichne alle Spieler in "last_pos[1]"
+        for last in last_pos[1]:
+            if last is not None:
+                x, y = last_pos[0][last_pos[1].index(last)]
+                self.spieler[last].set_xy((x, y))
+                self.numbers[last].set_x(x + self.rec_width/4)
+                self.numbers[last].set_y(y + self.rec_height/4)
+                self.spieler[last].set_visible(True)
+                self.numbers[last].set_visible(True)
+
         return
 
     def draw_new_queue_positions(self, deques):
@@ -355,32 +434,75 @@ class ButtonWindowFrame(tk.Frame):
         :return: kein Rückgabewert
         """
         for e in self.E:  # setzen der Positionen von Spielern in Warteschlange
+            # in "last_pos" wird für die aktuelle Warteschlange die letzte Position gespeichert, in welcher die Spieler
+            # aus dem Plot noch angezeigt werden (danach wird abgeschnitten, da Spieler nicht mehr in den Plot passen).
+            # Außerdem wird der letzte Spielerindex in der aktuellen Wartschlange gespeichert, damit der entsprechende
+            # Spieler als letztes im Plot dargestellt werden kann.
+            last_pos = None
             j = len(deques[self.E.index(e)]) -1  # erster Index in der deque
             vcount = 0
             while j >= 0:
                 try:
+                    pos = 0.91*self.posit[e[0]][1] + 0.09*self.posit[e[1]][1]
                     # TypeError, falls Spieler "self.deques[self.E.index(e)][j]" KEIN virtueller Spieler
                     int(deques[self.E.index(e)][j])
-                    # setze Position virtueller Spieler
-                    self.spielerV[self.E.index(e)][vcount].set_xy((0.91*self.posit[e[0]][0] + 0.09*self.posit[e[1]][0],
-                                                                   0.91*self.posit[e[0]][1] + 0.09*self.posit[e[1]][1] +
-                                                                   self.rec_height *
-                                                                   (len(deques[self.E.index(e)]) -1 -j)))
+                    # prüfe, ob Spieler noch in den Plot passt
+                    if pos + self.rec_height * (len(deques[self.E.index(e)]) -1 -j) < 1.45:
+                        # setze Position virtueller Spieler
+                        self.spielerV[self.E.index(e)][vcount].set_xy((0.91*self.posit[e[0]][0] +
+                                                                       0.09*self.posit[e[1]][0],
+                                                                       0.91*self.posit[e[0]][1] +
+                                                                       0.09*self.posit[e[1]][1] +
+                                                                       self.rec_height *
+                                                                       (len(deques[self.E.index(e)]) -1 -j)))
+                        self.spielerV[self.E.index(e)][vcount].set_visible(True)
+                    else:  # virtueller Spieler passt nicht mehr in den Plot
+                        self.spielerV[self.E.index(e)][vcount].set_visible(False)
+                        #self.spielerV[self.E.index(e)][vcount].set_facecolor('blue')
                     vcount += 1
                 except TypeError:
-                    self.spieler[deques[self.E.index(e)][j][0]].set_facecolor('red')
-                    # setze Position von Spieler "self.deques[self.E.index(e)][j]"
-                    self.spieler[deques[self.E.index(e)][j][0]].set_xy((0.91*self.posit[e[0]][0] +
-                                                                              0.09*self.posit[e[1]][0],
-                                                                              0.91*self.posit[e[0]][1] +
-                                                                              0.09*self.posit[e[1]][1] +
+                    # prüfe, ob Spieler noch in den Plot passt
+                    if pos + self.rec_height * (len(deques[self.E.index(e)]) -1 -j) < 1.45:
+                        self.spieler[deques[self.E.index(e)][j][0]].set_facecolor('red')
+                        # setze Position von Spieler "self.deques[self.E.index(e)][j]"
+                        self.spieler[deques[self.E.index(e)][j][0]].set_xy((0.91*self.posit[e[0]][0] +
+                                                                                  0.09*self.posit[e[1]][0],
+                                                                                  0.91*self.posit[e[0]][1] +
+                                                                                  0.09*self.posit[e[1]][1] +
                                                                 self.rec_height*(len(deques[self.E.index(e)]) -1 -j)))
-                    self.numbers[deques[self.E.index(e)][j][0]].set_x(0.91*self.posit[e[0]][0] +
-                                                                            0.09*self.posit[e[1]][0] + self.rec_width/3)
-                    self.numbers[deques[self.E.index(e)][j][0]].set_y(0.91*self.posit[e[0]][1] +
-                                                                            0.09*self.posit[e[1]][1] +
-                                                                            self.rec_height/4 +
-                                                                            self.rec_height *
-                                                                            (len(deques[self.E.index(e)]) -1 -j))
+                        self.numbers[deques[self.E.index(e)][j][0]].set_x(0.91*self.posit[e[0]][0] +
+                                                                          0.09*self.posit[e[1]][0] +
+                                                                          self.rec_width/4)
+                        self.numbers[deques[self.E.index(e)][j][0]].set_y(0.91*self.posit[e[0]][1] +
+                                                                                0.09*self.posit[e[1]][1] +
+                                                                                self.rec_height/4 +
+                                                                                self.rec_height *
+                                                                                (len(deques[self.E.index(e)]) -1 -j))
+                        self.spieler[deques[self.E.index(e)][j][0]].set_visible(True)
+                        self.numbers[deques[self.E.index(e)][j][0]].set_visible(True)
+                    else:  # Spieler passt nicht mehr in den Plot
+                        # merke letzten Spieler in dieser Position, um anzudeuten, wie viele Spieler sich noch in
+                        # dieser Warteschlange befinden
+                        if last_pos is None:
+                            last_pos = [deques[self.E.index(e)][j][0], j]
+                        else:
+                            last_pos[0] = deques[self.E.index(e)][j][0]
+                        self.spieler[deques[self.E.index(e)][j][0]].set_visible(False)
+                        self.numbers[deques[self.E.index(e)][j][0]].set_visible(False)
                 j -= 1
+
+            # zeichne Spieler in "last_pos"
+            if last_pos is not None:
+                self.spieler[last_pos[0]].set_facecolor('red')
+                self.spieler[last_pos[0]].set_xy((0.91*self.posit[e[0]][0] + 0.09*self.posit[e[1]][0],
+                                                  0.91*self.posit[e[0]][1] +0.09*self.posit[e[1]][1] +
+                                                  self.rec_height*(len(deques[self.E.index(e)]) -1 -last_pos[1])))
+                self.numbers[last_pos[0]].set_x(0.91*self.posit[e[0]][0] + 0.09*self.posit[e[1]][0] + self.rec_width/4)
+                self.numbers[last_pos[0]].set_y(0.91*self.posit[e[0]][1] + 0.09*self.posit[e[1]][1] +
+                                                                  self.rec_height/4 +
+                                                                  self.rec_height *
+                                                                  (len(deques[self.E.index(e)]) -1 -last_pos[1]))
+                self.spieler[last_pos[0]].set_visible(True)
+                self.numbers[last_pos[0]].set_visible(True)
+
         return
