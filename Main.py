@@ -1,6 +1,6 @@
 import numpy as np
 import networkx as nx
-import Math.data as data
+import Math.data_manyPhases as data
 from Math.Application import Application
 from Graphics.AbfrageVirtuelleSpieler import AbfrageVirtuelleSpieler
 from shutil import copyfile
@@ -9,8 +9,8 @@ from shutil import copyfile
 class Main:
     def __init__(self, graph, R, ST, alpha, variante, kanten_queue, start_queue, ende_queue, y0_queue):
         """
-        liest Parameter aus "Math/data.py" ein und startet das Programm (also erzeugt eine "Application" und ruft deren
-         "runner" Methode auf).
+        liest Parameter aus in Zeile 3 als "data" spezifizierter Datei ein und startet das Programm (also erzeugt eine
+         "Application" und ruft deren "runner" Methode auf).
         :param graph: Gerichteter Graph als Dictionary, falls kein Graph spezifiziert, so wird Graph aus Datei
          "GraphenGEXF/myGraph.gexf" eingelesen
         :param R: Liste aller Startzeitpunkte, indiziert in der Reihenfolge der Spieler
