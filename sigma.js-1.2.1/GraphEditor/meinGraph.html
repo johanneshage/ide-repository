@@ -694,7 +694,9 @@
 							dX: 0,
 							dY: 0,
 							//type: 'goo', //??? was ist das
-							color: '#108DC3'
+							color: '#108DC3',
+							properties: { out_neighbors: [],
+										edge_counts: [] }
 						},
 						{
 							id: (++nId) + '',
@@ -706,11 +708,13 @@
 							dX: 0,
 							dY: 0,
 							//type: 'goo',
-							color: tColors[0]
+							color: tColors[0],
+							properties: { out_neighbors: [],
+										edge_counts: [] }
 					}]
 				});
-				unbindAll();
 				s.refresh();
+				unbindAll();
 			},false);
 			
 			var button_reset_cam = document.getElementById('buttonResetCam');
@@ -833,11 +837,14 @@
 				});
 			}); 
 
+			// contextmenu of edges gets set to invisible
 			function hideContextMenu () {
 				var menu = document.querySelector('#context')
+				document.getElementById('update').removeEventListener('click', updateByTextfield);
 				menu.style.display = "none";
 			}
 
+			// contextmenu of nodes gets set to invisible
 			function hideContextMenuNodes () {
 				var menu = document.querySelector('#contextNodes')
 				menu.style.display = "none";
@@ -850,6 +857,7 @@
 				document.getElementById('update2').removeEventListener('click', updateByCheckbox);
 			});
 			
+			// stops all modes (e.g. "Knoten hinzufügen", "Kante entfernen", ...)
 			function unbindAll () {
 				s.unbind('click');
 				s.unbind('clickNode');
