@@ -13,10 +13,12 @@ class ContApp:
         """
 
         :param G:
-        :param u: Liste, welche für jeden Knoten aus 'G' eine Liste von 2-Tupeln der folgenden Form enthält:
+        :param u: Liste, welche für jeden Knoten aus 'G' eine leere Liste (-> kein externer Einfluss in diesen Knoten)
+                  oder eine Liste von 2-Tupeln der folgenden Form enthält:
                   (a_i,x_i): beschreibt den Einfluss von x_i Flusseinheiten innerhalb des Zeitintervalls [a_i,a_{i+1})
-                  in den entsprechenden Knoten. Beachte: nach Voraussetzung sind alle Einflüsse endlich, d.h. es
-                  existiert für jeden Knoten ein Index k, sodass a_k = \infty, x_k = 0.
+                  in den entsprechenden Knoten. Beachte: nach Voraussetzung sind alle Einflüsse endlich, d.h. für jeden
+                  dieser Knoten ist der letzte Eintrag in dieser Liste ein Tupel der Form (t, 0) für einen Zeitpunkt
+                  t < infty.
         """
         self.E = []  # Kanten
         self.nu = []  # Kapazitaeten
@@ -41,8 +43,11 @@ class ContApp:
         self.q_global = [self.m * [0]]  # speichere für jede globale Phase alle momentanen Warteschlangenlängen zu
         # Beginn der Phase
 
-        self.fp = self.m * [[(0,0)]]  # f^+
-        self.fm = self.m * [[(0,0)]]  # f^-
+        self.fp = []  # f^+
+        self.fm = []  # f^-
+        for i in range(self.m):
+            self.fp.append([(0,0)])
+            self.fm.append([(0,0)])
 
         self.c.append(np.zeros(self.m))
         for e in self.E:  # Initialisierung "self.c" (Kosten)
@@ -52,8 +57,8 @@ class ContApp:
 
         self.E_active = np.ones(self.m)
         top_ord = self.topologicalSort()
-        lastNode = top_ord[-1]
-        self.labels.append(self.dijkstra(self.graphReversed, "t1", lastNode, 0,visited=[], distances={}))
+        self.lastNode = top_ord[-1]
+        self.labels.append(self.dijkstra(self.graphReversed, "t1", self.lastNode, 0,visited=[], distances={}))
 
         self.E_active = np.zeros(self.m)
         for v in self.V:
@@ -98,13 +103,14 @@ class ContApp:
         return stack
 
     # Quelle: http://www.gilles-bertrand.com/2014/03/dijkstra-algorithm-python-example-source-code-shortest-path.html
-    def dijkstra(self, graph, src, dest, phase, visited=[], distances={}, predecessors={}):
+    def dijkstra(self, graph, src, dest, phase_ind, visited=[], distances={}, predecessors={}):
         """
-        Berechnet rekursiv kürzesten Weg und dessen Kosten von "src" zu "dest" im Graph "graph" zum Zeitpunkt "phase"
+        Berechnet rekursiv kürzesten Weg und dessen Kosten von "src" zu "dest" im Graph "graph" zum Zeitpunkt
+        "self.global_phase[phase_ind]"
         :param graph: Graph als Dictionary
         :param src: Startknoten
         :param dest: Zielknoten
-        :param phase: Zeitpunkt
+        :param phase_ind: Index des Zeitpunkts
         :param visited: Liste der bereits besuchten Knoten, anfangs leer, muss nicht beachtet werden, da nur intern für
          die Funktion benötigt
         :param distances: Liste der bereits berechneten Distanzen aller Knoten zu "src", anfangs leer, muss nicht
@@ -149,7 +155,7 @@ class ContApp:
             # visit the neighbors
             for neighbor in graph[src]:
                 if neighbor not in visited:
-                    new_distance = distances[src] + self.c[phase][self.E.index((neighbor,src))]
+                    new_distance = distances[src] + self.c[phase_ind][self.E.index((neighbor,src))]
                     if new_distance < distances.get(neighbor,float('inf')):
                         distances[neighbor] = new_distance
                         predecessors[neighbor] = src
@@ -164,7 +170,7 @@ class ContApp:
                 if k not in visited:
                     unvisited[k] = distances.get(k,float('inf'))
             x=min(unvisited, key=unvisited.get)
-            return self.dijkstra(graph, x, dest, phase, visited, distances, predecessors)
+            return self.dijkstra(graph, x, dest, phase_ind, visited, distances, predecessors)
 
     def reverse_graph(self, graph):
         """
@@ -233,10 +239,13 @@ class ContApp:
             for e in active_paths:
                 e_ind = self.E.index(e)
                 phase_ind = 0
-                while phase > self.fm[e_ind][phase_ind][0]:
-                    phase_ind += 1
-                if phase < self.fm[e_ind][phase_ind][0]:
-                    phase_ind -= 1
+                if phase > self.fm[e_ind][-1][0]:
+                    phase_ind = len(self.fm[e_ind]) - 1
+                else:
+                    while phase > self.fm[e_ind][phase_ind][0]:
+                        phase_ind += 1
+                    if phase < self.fm[e_ind][phase_ind][0]:
+                        phase_ind -= 1
                 b += self.fm[e_ind][phase_ind][0]
             for tuple in self.u[self.V.index(v)]:
                 if tuple[0] < phase:
@@ -249,7 +258,8 @@ class ContApp:
         con = {'type':'eq', 'fun': constraint}
 
         def objective(x):
-            return sum([integrate.quad(lambda z: self.change_of_queue(e, phase, z), 0, x)[0] for e in active_paths])
+            return sum([integrate.quad(lambda z: self.change_of_label(e, phase, z), 0, x[active_paths.index(e)])[0] for
+                        e in active_paths])
 
         return minimize(objective, x0, method='SLSQP',bounds=bound, constraints=con)
 
@@ -289,20 +299,32 @@ class ContApp:
         delta_p = [self.E.index((v,u)) for u in self.G[v].keys()]
         return [self.E[e] for e in delta_p if self.E_active[e]]
 
-    def change_of_queue(self, e, phase, z):
+    def change_of_label(self, e, phase, z):
         """
-        Funktion 'g_e' für Optimierungsprobleme OPT-b_v^-(theta). Gibt die Änderung der Warteschlangenlänge bei Zufluss
-        'z' in Kante 'e' an.
+        Gibt die momentane Änderung des Labels des Startknotens von 'e' unter Einfluss 'z' in 'e' an.
         :param e: Betrachtete Kante
         :param phase: Betrachteter Zeitpunkt
         :param z: Einflussrate in Kante 'e'
-        :return: Änderungsrate der Warteschlangenlänge
+        :return: Änderungsrate des Labels des Startknotens von 'e'
         """
         e_ind = self.E.index(e)
         tar_ind = self.V.index(e[1])
-        if self.q_global[phase][e_ind] > 0:
+        if self.q_global[self.global_phase.index(phase)][e_ind] > 0:
             return (z - self.nu[e_ind])/self.nu[e_ind] + self.del_plus_label[tar_ind]
-        return np.max((z - self.nu[e_ind])/self.nu[e_ind], 0) + self.del_plus_label[tar_ind]
+        return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0]) + self.del_plus_label[tar_ind]
+
+    def change_of_cost(self, e, phase, z):
+        """
+        Gibt die momentane Änderung der Kostenänderung der Kante 'e' bei Zufluss 'z' an.
+        :param e: Betrachtete Kante
+        :param phase: Betrachteter Zeitpunkt
+        :param z: Einflussrate in Kante 'e'
+        :return: Änderungsrate der Kosten
+        """
+        e_ind = self.E.index(e)
+        if self.q_global[self.global_phase.index(phase)][e_ind] > 0:
+            return (z - self.nu[e_ind])/self.nu[e_ind]
+        return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0])
 
     def main(self):
         theta = 0
@@ -323,33 +345,36 @@ class ContApp:
                     e_act_ind = active_paths.index(e)
                     x_total[e_ind] = x.x[e_act_ind]
 
+                    if theta == 0:
+                        start_ind = self.V.index(self.E[e_ind][0])
+                        if len(self.u[start_ind]) > 0 and self.u[start_ind][0][0] == 0:
+                            self.fp[e_ind][0] = (0, x_total[e_ind])
                     if self.fp[e_ind][-1][1] != x_total[e_ind]:
                         self.fp[e_ind].append((theta, x_total[e_ind]))
                     outflow = np.min([x_total[e_ind], self.nu[e_ind]])
                     if self.fm[e_ind][-1][1] != outflow:
                         self.fm[e_ind].append((theta + self.r[e_ind], outflow))
 
-                    change = self.change_of_queue(e, theta, x.x[e_act_ind])
+                    change = self.change_of_cost(e, theta, x.x[e_act_ind])
                     self.del_plus_label[self.V.index(e[0])] = change + self.del_plus_label[self.V.index(e[1])]
                     # Falls die Warteschlange von 'e' unter aktuellem Fluss abgebaut wird, bestimme Zeitpunkt, zu dem
                     # diese vollständig abgebaut ist (bei gleich bleibendem Fluss)
                     if change < 0:
                         # 'phase_length': Dauer bis Warteschlangenlänge gleich 0
-                        phase_length = -self.q_global[self.global_phase.index(theta)][self.E.index(e)]/change
+                        phase_length = - self.q_global[self.global_phase.index(theta)][self.E.index(e)] / change
                         if phase_length < next_phase:
                             next_phase = phase_length
 
                 delta_p = self.get_outgoing_edges(v)
                 inactive_paths = [e for e in delta_p if e not in active_paths]
                 active = active_paths[0]  # aktive Kante
-                active_change = self.change_of_queue(active, theta, x.x[0])  # Änderung der Warteschlange dieser Kante
+                active_change = self.change_of_cost(active, theta, x.x[0])  # Änderung der Kosten dieser Kante
                 for e in inactive_paths:
                     e_ind = self.E.index(e)
-
                     if self.fp[e_ind][-1][1] != 0:
                         self.fp[e_ind].append((theta, 0))
 
-                    change = self.change_of_queue(e, theta, 0)
+                    change = self.change_of_cost(e, theta, 0)
                     # Falls Warteschlange existiert (und somit abgebaut wird da inaktiv), bestimme Zeitpunkt, zu dem
                     # diese vollständig abgebaut ist
                     if change < 0:
@@ -359,17 +384,30 @@ class ContApp:
                     # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
                     tar_ind = self.V.index(e[1])
                     act_ind = self.V.index(active[1])
-                    if self.labels[theta][tar_ind] + change * next_phase <= self.labels[theta][act_ind] + \
-                                                                         active_change * next_phase:
-                        next_phase = (self.labels[theta][act_ind] - self.labels[theta][tar_ind])/(change -active_change)
+                    theta_ind = self.global_phase.index(theta)
+                    if self.labels[theta_ind][tar_ind] + change * next_phase < self.labels[theta_ind][act_ind] +\
+                            active_change * next_phase and change != active_change:
+                        next_phase = np.abs((self.labels[theta_ind][act_ind] - self.labels[theta_ind][tar_ind]) /
+                                            (change - active_change))
+
             new_q_global = []
+            self.c.append(np.zeros(self.m))
+            theta_ind = self.global_phase.index(theta)
             for e in self.E:
                 ind = self.E.index(e)
-                new_q_global.append(self.q_global[theta][ind] + self.change_of_queue(e, theta, x_total[ind])*next_phase)
+                new_q_global.append(self.q_global[theta_ind][ind] + self.change_of_cost(e, theta, x_total[ind]) *
+                                    self.nu[ind] * next_phase)
+                # überprüfe, ob Warteschlange von 'e' in dieser Phase vollständig abgebaut wird und 'e' inaktiv ist,
+                # dann muss f^-(e) auf 0 gesetzt werden
+                if self.q_global[theta_ind][ind] > 0 and new_q_global[-1] == 0 and x_total[ind] == 0:
+                    self.fm[ind].append((theta + next_phase, 0))
+                self.c[-1][ind] = new_q_global[-1] / self.nu[ind] + self.r[ind]
             # speichere aktuelle Warteschlangenlängen
             self.q_global.append(new_q_global)
             theta += next_phase
             # speichere Phase
             self.global_phase.append(theta)
+            self.labels.append(self.dijkstra(self.graphReversed, "t1", self.lastNode, len(self.global_phase) - 1,
+                                             visited=[], distances={}))
         return 0
 
