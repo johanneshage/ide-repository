@@ -53,12 +53,15 @@ class ContApp:
         for e in self.E:  # Initialisierung "self.c" (Kosten)
             self.c[0][self.E.index(e)] = self.r[self.E.index(e)]
 
+        self.u_start = set()
+        for s_list in self.u:
+            for t in s_list:
+                self.u_start.add(t[0])
+
         self.graphReversed = self.reverse_graph(G)
 
         self.E_active = np.ones(self.m)
-        top_ord = self.topologicalSort()
-        self.lastNode = top_ord[-1]
-        self.labels.append(self.dijkstra(self.graphReversed, "t1", self.lastNode, 0,visited=[], distances={}))
+        self.labels.append(self.dijkstra(self.graphReversed, "t1", 0,visited=[], distances={}))
 
         self.E_active = np.zeros(self.m)
         for v in self.V:
@@ -103,13 +106,12 @@ class ContApp:
         return stack
 
     # Quelle: http://www.gilles-bertrand.com/2014/03/dijkstra-algorithm-python-example-source-code-shortest-path.html
-    def dijkstra(self, graph, src, dest, phase_ind, visited=[], distances={}, predecessors={}):
+    def dijkstra(self, graph, src, phase_ind, visited=[], distances={}, predecessors={}):
         """
-        Berechnet rekursiv kürzesten Weg und dessen Kosten von "src" zu "dest" im Graph "graph" zum Zeitpunkt
-        "self.global_phase[phase_ind]"
+        Berechnet rekursiv kürzesten Weg und dessen Kosten von "src" zu jedem erreichbaren Knoten in "graph" zum
+        Zeitpunkt "self.global_phase[phase_ind]"
         :param graph: Graph als Dictionary
         :param src: Startknoten
-        :param dest: Zielknoten
         :param phase_ind: Index des Zeitpunkts
         :param visited: Liste der bereits besuchten Knoten, anfangs leer, muss nicht beachtet werden, da nur intern für
          die Funktion benötigt
@@ -119,7 +121,7 @@ class ContApp:
          werden, da nur intern für die Funktion benötigt
         :return: "output": Liste über alle Knoten mit deren Distanzen zur ersten(!) "src", also zu dem Knoten, der beim
                            ersten Aufruf von "dijkstra" als "src" übergeben wurde
-                 "self.dijkstra(graph, x, dest, i, theta, visited, distances, predecessors)": sorgt für rekursives
+                 "self.dijkstra(graph, x, theta, visited, distances, predecessors)": sorgt für rekursives
                            Aufrufen dieser Funktion, endet mit return von "output"
         """
         """ calculates a shortest path tree routed in src
@@ -127,50 +129,38 @@ class ContApp:
         # a few sanity checks
         if src not in graph:
             raise TypeError('The root of the shortest path tree cannot be found')
-        if dest not in graph:
-            raise TypeError('The target of the shortest path cannot be found')
-            # ending condition
-        if src == dest:
+        # if it is the initial run, initializes the cost
+        if not visited:
+            distances[src] = 0
+        # visit the neighbors
+        for neighbor in graph[src]:
+            if neighbor not in visited:
+                new_distance = distances[src] + self.c[phase_ind][self.E.index((neighbor,src))]
+                if new_distance < distances.get(neighbor,float('inf')):
+                    distances[neighbor] = new_distance
+                    predecessors[neighbor] = src
+        # mark as visited
+        if src not in visited:
+            visited.append(src)
+        # now that all neighbors have been visited: recurse
+        # select the non visited node with lowest distance 'x'
+        # run Dijkstra with src='x'
+        unvisited = {}
+        for k in graph:
+            if k not in visited:
+                unvisited[k] = distances.get(k,float('inf'))
+        vals = unvisited.values()
+        # check if no more nodes are reachable
+        if np.all(len(vals) == 0 or vals == float('inf')):
             output = []
-            if len(distances) == 0:
-                for v in self.V:
-                    if v == dest:
-                        output.append(0)
-                    else:
-                        output.append(float('inf'))
-                return output
-            elif dest not in distances:
-                raise TypeError('The target is not reachable from the root')
-
             for v in self.V:
                 if v in distances:
                     output.append(distances[v])
                 else:
                     output.append(float('inf'))
             return output
-        else:
-            # if it is the initial run, initializes the cost
-            if not visited:
-                distances[src] = 0
-            # visit the neighbors
-            for neighbor in graph[src]:
-                if neighbor not in visited:
-                    new_distance = distances[src] + self.c[phase_ind][self.E.index((neighbor,src))]
-                    if new_distance < distances.get(neighbor,float('inf')):
-                        distances[neighbor] = new_distance
-                        predecessors[neighbor] = src
-            # mark as visited
-            if src not in visited:
-                visited.append(src)
-            # now that all neighbors have been visited: recurse
-            # select the non visited node with lowest distance 'x'
-            # run Dijkstra with src='x'
-            unvisited = {}
-            for k in graph:
-                if k not in visited:
-                    unvisited[k] = distances.get(k,float('inf'))
-            x=min(unvisited, key=unvisited.get)
-            return self.dijkstra(graph, x, dest, phase_ind, visited, distances, predecessors)
+        x=min(unvisited, key=unvisited.get)
+        return self.dijkstra(graph, x, phase_ind, visited, distances, predecessors)
 
     def reverse_graph(self, graph):
         """
@@ -246,12 +236,13 @@ class ContApp:
                         phase_ind += 1
                     if phase < self.fm[e_ind][phase_ind][0]:
                         phase_ind -= 1
-                b += self.fm[e_ind][phase_ind][0]
-            for tuple in self.u[self.V.index(v)]:
-                if tuple[0] < phase:
-                    continue
-                b += tuple[1]
-                break
+                b += self.fm[e_ind][phase_ind][1]
+            u_v = self.u[self.V.index(v)]
+            u_v_len = len(u_v)
+            for tuple_ind in range(u_v_len - 1, -1, -1):
+                if u_v[tuple_ind][0] <= phase:
+                    b += u_v[tuple_ind][1]
+                    break
             return sum(x[:]) - b
             #return LinearConstraint(np.ones(len(x)), b, b)
 
@@ -333,8 +324,12 @@ class ContApp:
         x_total = np.zeros(self.m)
         T = 100
         while theta < T:
+            start_points = [t for t in self.u_start if t > theta]
             # 'next_phase' bestimmt am Ende der Schleife, wie lange aktuelle Phase andauert
-            next_phase = T
+            if len(start_points) > 0:
+                next_phase = np.min(start_points)
+            else:
+                next_phase = T
             for v in top_ord:
                 x = self.opt(v, theta)
                 if x == 0:
@@ -387,8 +382,10 @@ class ContApp:
                     theta_ind = self.global_phase.index(theta)
                     if self.labels[theta_ind][tar_ind] + change * next_phase < self.labels[theta_ind][act_ind] +\
                             active_change * next_phase and change != active_change:
-                        next_phase = np.abs((self.labels[theta_ind][act_ind] - self.labels[theta_ind][tar_ind]) /
-                                            (change - active_change))
+                        time_ub = np.abs((self.labels[theta_ind][act_ind] - self.labels[theta_ind][tar_ind]) /
+                                        (change - active_change))
+                        if time_ub < next_phase:
+                            next_phase = time_ub
 
             new_q_global = []
             self.c.append(np.zeros(self.m))
@@ -404,10 +401,19 @@ class ContApp:
                 self.c[-1][ind] = new_q_global[-1] / self.nu[ind] + self.r[ind]
             # speichere aktuelle Warteschlangenlängen
             self.q_global.append(new_q_global)
+
+            print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, " :")
+            for v_ind in range(self.n):
+                out_neighbors = self.get_outgoing_edges(top_ord[v_ind])
+                for e in out_neighbors:
+                    e_ind = self.E.index(e)
+                    if x_total[e_ind] > 0:
+                        print(e, x_total[self.E.index(e)])
+
             theta += next_phase
             # speichere Phase
             self.global_phase.append(theta)
-            self.labels.append(self.dijkstra(self.graphReversed, "t1", self.lastNode, len(self.global_phase) - 1,
+            self.labels.append(self.dijkstra(self.graphReversed, "t1", len(self.global_phase) - 1,
                                              visited=[], distances={}))
         return 0
 
