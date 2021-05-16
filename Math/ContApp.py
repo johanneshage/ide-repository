@@ -31,6 +31,7 @@ class ContApp:
         self.u = u
         self.items = G.items()
         self.keys = G.keys()
+        self.eps = 10**(-4)  # Für Rundungsfehler
 
         for delta in self.items:
             for w in list(delta[1].keys()):
@@ -65,11 +66,12 @@ class ContApp:
 
         self.E_active = np.zeros(self.m)
         for v in self.V:
-            for w in self.G[v].keys():
-                v_ind = self.V.index(v)
+            v_ind = self.V.index(v)
+            outneighbors = self.G[v].keys()
+            for w in outneighbors:
                 w_ind = self.V.index(w)
                 edge = self.E.index((v, w))
-                if self.labels[0][v_ind] == self.labels[0][w_ind] + self.c[0][edge]:
+                if abs(self.labels[0][v_ind] - self.labels[0][w_ind] - self.c[0][edge]) < self.eps:
                     self.E_active[edge] = 1
 
         self.del_plus_label = np.zeros(self.n)
@@ -220,11 +222,10 @@ class ContApp:
             Berechnung des Vektors b_v^-(phase) und Nebenbedingung \sum_{i=1}^{p_k} x_{vw_i} = b_v^-(phase) für
             Optimierungsproblem OPT-b_v^-(phase)
             :param x: Optimierungsvariable
-            :param v: Knoten
-            :param phase: Zeit
             :return: Gleichheits - Nebenbedingung
             """
             b = 0
+            v_ind = self.V.index(v)
             active_paths = self.get_ingoing_active_edges(v)
             for e in active_paths:
                 e_ind = self.E.index(e)
@@ -237,7 +238,7 @@ class ContApp:
                     if phase < self.fm[e_ind][phase_ind][0]:
                         phase_ind -= 1
                 b += self.fm[e_ind][phase_ind][1]
-            u_v = self.u[self.V.index(v)]
+            u_v = self.u[v_ind]
             u_v_len = len(u_v)
             for tuple_ind in range(u_v_len - 1, -1, -1):
                 if u_v[tuple_ind][0] <= phase:
@@ -252,7 +253,7 @@ class ContApp:
             return sum([integrate.quad(lambda z: self.change_of_label(e, phase, z), 0, x[active_paths.index(e)])[0] for
                         e in active_paths])
 
-        return minimize(objective, x0, method='SLSQP',bounds=bound, constraints=con)
+        return minimize(objective, x0, method='SLSQP',bounds=bound, constraints=con).x
 
     def get_ingoing_edges(self, v):
         """
@@ -306,7 +307,7 @@ class ContApp:
 
     def change_of_cost(self, e, phase, z):
         """
-        Gibt die momentane Änderung der Kostenänderung der Kante 'e' bei Zufluss 'z' an.
+        Gibt die momentane Kostenänderung der Kante 'e' bei Zufluss 'z' an.
         :param e: Betrachtete Kante
         :param phase: Betrachteter Zeitpunkt
         :param z: Einflussrate in Kante 'e'
@@ -319,12 +320,12 @@ class ContApp:
 
     def main(self):
         theta = 0
-        top_ord = self.topologicalSort()
+        T = 100
         # Aufteilung des Flusses
         x_total = np.zeros(self.m)
-        T = 100
         while theta < T:
             start_points = [t for t in self.u_start if t > theta]
+            top_ord = self.topologicalSort()
             # 'next_phase' bestimmt am Ende der Schleife, wie lange aktuelle Phase andauert
             if len(start_points) > 0:
                 next_phase = np.min(start_points)
@@ -332,13 +333,16 @@ class ContApp:
                 next_phase = T
             for v in top_ord:
                 x = self.opt(v, theta)
-                if x == 0:
+                if isinstance(x, int) or isinstance(x, float):
+                    if x == 0:
+                        continue
+                elif len(x) == 1 and x[0] == 0:
                     continue
                 active_paths = self.get_outgoing_active_edges(v)
                 for e in active_paths:
                     e_ind = self.E.index(e)
                     e_act_ind = active_paths.index(e)
-                    x_total[e_ind] = x.x[e_act_ind]
+                    x_total[e_ind] = x[e_act_ind]
 
                     if theta == 0:
                         start_ind = self.V.index(self.E[e_ind][0])
@@ -350,7 +354,10 @@ class ContApp:
                     if self.fm[e_ind][-1][1] != outflow:
                         self.fm[e_ind].append((theta + self.r[e_ind], outflow))
 
-                    change = self.change_of_cost(e, theta, x.x[e_act_ind])
+                    if 0 < self.fm[e_ind][-1][0] - theta < next_phase:
+                        next_phase = self.fm[e_ind][-1][0] - theta
+
+                    change = self.change_of_cost(e, theta, x[e_act_ind])
                     self.del_plus_label[self.V.index(e[0])] = change + self.del_plus_label[self.V.index(e[1])]
                     # Falls die Warteschlange von 'e' unter aktuellem Fluss abgebaut wird, bestimme Zeitpunkt, zu dem
                     # diese vollständig abgebaut ist (bei gleich bleibendem Fluss)
@@ -363,9 +370,11 @@ class ContApp:
                 delta_p = self.get_outgoing_edges(v)
                 inactive_paths = [e for e in delta_p if e not in active_paths]
                 active = active_paths[0]  # aktive Kante
-                active_change = self.change_of_cost(active, theta, x.x[0])  # Änderung der Kosten dieser Kante
+                active_ind = self.E.index(active)
+                active_change = self.change_of_cost(active, theta, x[0])  # Änderung der Kosten dieser Kante
                 for e in inactive_paths:
                     e_ind = self.E.index(e)
+                    x_total[e_ind] = 0
                     if self.fp[e_ind][-1][1] != 0:
                         self.fp[e_ind].append((theta, 0))
 
@@ -380,10 +389,12 @@ class ContApp:
                     tar_ind = self.V.index(e[1])
                     act_ind = self.V.index(active[1])
                     theta_ind = self.global_phase.index(theta)
-                    if self.labels[theta_ind][tar_ind] + change * next_phase < self.labels[theta_ind][act_ind] +\
-                            active_change * next_phase and change != active_change:
-                        time_ub = np.abs((self.labels[theta_ind][act_ind] - self.labels[theta_ind][tar_ind]) /
-                                        (change - active_change))
+                    if self.labels[theta_ind][tar_ind] + self.r[e_ind] + change * next_phase < \
+                            self.labels[theta_ind][act_ind] + self.r[active_ind] + active_change * next_phase and \
+                            change != active_change:
+                        time_ub = np.abs((self.labels[theta_ind][act_ind] + self.r[e_ind] -
+                                          self.labels[theta_ind][tar_ind] - self.r[active_ind]) /
+                                         (change - active_change))
                         if time_ub < next_phase:
                             next_phase = time_ub
 
@@ -415,5 +426,16 @@ class ContApp:
             self.global_phase.append(theta)
             self.labels.append(self.dijkstra(self.graphReversed, "t1", len(self.global_phase) - 1,
                                              visited=[], distances={}))
+
+            self.E_active = np.zeros(self.m)
+            for v in self.V:
+                v_ind = self.V.index(v)
+                outneighbors = self.G[v].keys()
+                for w in outneighbors:
+                    w_ind = self.V.index(w)
+                    edge = self.E.index((v, w))
+                    if abs(self.labels[-1][v_ind] - self.labels[-1][w_ind] - self.c[-1][edge]) < self.eps:
+                        self.E_active[edge] = 1
+
         return 0
 
