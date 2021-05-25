@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.integrate as integrate
 from scipy.optimize import minimize, LinearConstraint, Bounds
+from Graphics.OutputTable import OutputTable
 
 
 
@@ -45,10 +46,12 @@ class ContApp:
         # Beginn der Phase
 
         self.fp = []  # f^+
+        self.fp_ind = []  # Liste der Indizes der Phasen
         self.fm = []  # f^-
         for i in range(self.m):
-            self.fp.append([(0,0)])
-            self.fm.append([(0,0)])
+            self.fp.append([(0, 0)])
+            self.fp_ind.append([])
+            self.fm.append([(0, 0)])
 
         self.c.append(np.zeros(self.m))
         for e in self.E:  # Initialisierung "self.c" (Kosten)
@@ -61,10 +64,10 @@ class ContApp:
 
         self.graphReversed = self.reverse_graph(G)
 
-        self.E_active = np.ones(self.m)
+        self.E_active = [np.ones(self.m)]
         self.labels.append(self.dijkstra(self.graphReversed, "t1", 0,visited=[], distances={}))
 
-        self.E_active = np.zeros(self.m)
+        self.E_active = [np.zeros(self.m)]
         for v in self.V:
             v_ind = self.V.index(v)
             outneighbors = self.G[v].keys()
@@ -72,7 +75,7 @@ class ContApp:
                 w_ind = self.V.index(w)
                 edge = self.E.index((v, w))
                 if abs(self.labels[0][v_ind] - self.labels[0][w_ind] - self.c[0][edge]) < self.eps:
-                    self.E_active[edge] = 1
+                    self.E_active[0][edge] = 1
 
         self.del_plus_label = np.zeros(self.n)
         self.main()
@@ -86,7 +89,7 @@ class ContApp:
         # Recur for all the vertices adjacent to this vertex
         outneighbors = self.G[v]
         for w in outneighbors:
-            if self.E_active[self.E.index((v,w))] and not visited[self.V.index(w)]:
+            if self.E_active[-1][self.E.index((v,w))] and not visited[self.V.index(w)]:
                 self.topologicalSortUtil(w, visited, stack)
 
         # Push current vertex to stack which stores result
@@ -181,6 +184,7 @@ class ContApp:
             graphReversed[v] = dictionary
         return graphReversed
 
+    '''
     def q(self, e, global_theta, epsilon):
         """
         berechnet Warteschlangenlänge für Kante 'e' zum Zeitpunkt 'global_theta' + 'epsilon', unter der Voraussetzung,
@@ -200,6 +204,7 @@ class ContApp:
         # beachte: folgender Wert ist größer gleich 0, da sonst 'epsilon' ungültig, d.h. 'epsilon' ist so groß, dass
         # 'global_theta' + 'epsilon' bereits in neuer globaler Phase liegt
         return self.q_global[self.global_phase.index(global_theta)][e] + epsilon*(self.fp[e][global_theta] - self.nu[e])
+    '''
 
     def opt(self, v, phase):
         """
@@ -211,7 +216,7 @@ class ContApp:
         """
         neighbors = self.G[v].keys()
         delta_p = [self.E.index((v,w)) for w in neighbors]
-        active_paths = [self.E[e] for e in delta_p if self.E_active[e]]
+        active_paths = [self.E[e] for e in delta_p if self.E_active[-1][e]]
         if len(active_paths) == 0:
             return 0
         x0 = np.zeros(len(active_paths))
@@ -272,7 +277,7 @@ class ContApp:
         """
         preds = self.graphReversed[v].keys()
         delta_m = [self.E.index((u,v)) for u in preds]
-        return [self.E[e] for e in delta_m if self.E_active[e]]
+        return [self.E[e] for e in delta_m if self.E_active[-1][e]]
 
     def get_outgoing_edges(self, v):
         """
@@ -289,7 +294,7 @@ class ContApp:
         :return: Liste der aktiven Kanten
         """
         delta_p = [self.E.index((v,u)) for u in self.G[v].keys()]
-        return [self.E[e] for e in delta_p if self.E_active[e]]
+        return [self.E[e] for e in delta_p if self.E_active[-1][e]]
 
     def change_of_label(self, e, phase, z):
         """
@@ -326,6 +331,7 @@ class ContApp:
         while theta < T:
             start_points = [t for t in self.u_start if t > theta]
             top_ord = self.topologicalSort()
+            theta_ind = self.global_phase.index(theta)
             # 'next_phase' bestimmt am Ende der Schleife, wie lange aktuelle Phase andauert
             if len(start_points) > 0:
                 next_phase = np.min(start_points)
@@ -347,11 +353,16 @@ class ContApp:
                     if theta == 0:
                         start_ind = self.V.index(self.E[e_ind][0])
                         if len(self.u[start_ind]) > 0 and self.u[start_ind][0][0] == 0:
-                            self.fp[e_ind][0] = (0, x_total[e_ind])
-                    if self.fp[e_ind][-1][1] != x_total[e_ind]:
+                            self.fp[e_ind][0] = ((0, x_total[e_ind]))
+                            self.fp_ind[e_ind].append(0)
+                    elif abs(self.fp[e_ind][-1][1] - x_total[e_ind]) > self.eps:
                         self.fp[e_ind].append((theta, x_total[e_ind]))
-                    outflow = np.min([x_total[e_ind], self.nu[e_ind]])
-                    if self.fm[e_ind][-1][1] != outflow:
+                        self.fp_ind[e_ind].append(theta_ind)
+                    if self.q_global[theta_ind][e_ind] > 0:
+                        outflow = self.nu[e_ind]
+                    else:
+                        outflow = np.min([x_total[e_ind], self.nu[e_ind]])
+                    if abs(self.fm[e_ind][-1][1] - outflow) > self.eps:
                         self.fm[e_ind].append((theta + self.r[e_ind], outflow))
 
                     if 0 < self.fm[e_ind][-1][0] - theta < next_phase:
@@ -363,7 +374,7 @@ class ContApp:
                     # diese vollständig abgebaut ist (bei gleich bleibendem Fluss)
                     if change < 0:
                         # 'phase_length': Dauer bis Warteschlangenlänge gleich 0
-                        phase_length = - self.q_global[self.global_phase.index(theta)][self.E.index(e)] / change
+                        phase_length = - self.q_global[theta_ind][self.E.index(e)] / change
                         if phase_length < next_phase:
                             next_phase = phase_length
 
@@ -375,43 +386,43 @@ class ContApp:
                 for e in inactive_paths:
                     e_ind = self.E.index(e)
                     x_total[e_ind] = 0
-                    if self.fp[e_ind][-1][1] != 0:
+                    if abs(self.fp[e_ind][-1][1]) > self.eps:
                         self.fp[e_ind].append((theta, 0))
+                        self.fp_ind[e_ind].append(theta_ind)
 
                     change = self.change_of_cost(e, theta, 0)
                     # Falls Warteschlange existiert (und somit abgebaut wird da inaktiv), bestimme Zeitpunkt, zu dem
                     # diese vollständig abgebaut ist
                     if change < 0:
-                        phase_length = -self.q_global[self.global_phase.index(theta)][self.E.index(e)]/change
+                        phase_length = -self.q_global[theta_ind][self.E.index(e)]/change
                         if phase_length < next_phase:
                             next_phase = phase_length
                     # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
                     tar_ind = self.V.index(e[1])
                     act_ind = self.V.index(active[1])
-                    theta_ind = self.global_phase.index(theta)
                     if self.labels[theta_ind][tar_ind] + self.r[e_ind] + change * next_phase < \
                             self.labels[theta_ind][act_ind] + self.r[active_ind] + active_change * next_phase and \
-                            change != active_change:
+                            abs(change - active_change) > self.eps:
                         time_ub = np.abs((self.labels[theta_ind][act_ind] + self.r[e_ind] -
                                           self.labels[theta_ind][tar_ind] - self.r[active_ind]) /
                                          (change - active_change))
                         if time_ub < next_phase:
                             next_phase = time_ub
 
-            new_q_global = []
-            self.c.append(np.zeros(self.m))
-            theta_ind = self.global_phase.index(theta)
-            for e in self.E:
-                ind = self.E.index(e)
-                new_q_global.append(self.q_global[theta_ind][ind] + self.change_of_cost(e, theta, x_total[ind]) *
-                                    self.nu[ind] * next_phase)
-                # überprüfe, ob Warteschlange von 'e' in dieser Phase vollständig abgebaut wird und 'e' inaktiv ist,
-                # dann muss f^-(e) auf 0 gesetzt werden
-                if self.q_global[theta_ind][ind] > 0 and new_q_global[-1] == 0 and x_total[ind] == 0:
-                    self.fm[ind].append((theta + next_phase, 0))
-                self.c[-1][ind] = new_q_global[-1] / self.nu[ind] + self.r[ind]
-            # speichere aktuelle Warteschlangenlängen
-            self.q_global.append(new_q_global)
+            if next_phase != T:
+                new_q_global = []
+                self.c.append(np.zeros(self.m))
+                for e in self.E:
+                    ind = self.E.index(e)
+                    new_q_global.append(self.q_global[theta_ind][ind] + self.change_of_cost(e, theta, x_total[ind]) *
+                                        self.nu[ind] * next_phase)
+                    # überprüfe, ob Warteschlange von 'e' in dieser Phase vollständig abgebaut wird und 'e' inaktiv ist,
+                    # dann muss f^-(e) auf 0 gesetzt werden
+                    if self.q_global[theta_ind][ind] > 0 and abs(new_q_global[-1]) < self.eps and abs(x_total[ind]) < self.eps:
+                        self.fm[ind].append((theta + next_phase, 0))
+                    self.c[-1][ind] = new_q_global[-1] / self.nu[ind] + self.r[ind]
+                # speichere aktuelle Warteschlangenlängen
+                self.q_global.append(new_q_global)
 
             print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, " :")
             for v_ind in range(self.n):
@@ -422,20 +433,30 @@ class ContApp:
                         print(e, x_total[self.E.index(e)])
 
             theta += next_phase
-            # speichere Phase
-            self.global_phase.append(theta)
-            self.labels.append(self.dijkstra(self.graphReversed, "t1", len(self.global_phase) - 1,
-                                             visited=[], distances={}))
+            if next_phase != T:
+                # speichere Phase
+                self.global_phase.append(theta)
+                self.labels.append(self.dijkstra(self.graphReversed, "t1", len(self.global_phase) - 1,
+                                                 visited=[], distances={}))
 
-            self.E_active = np.zeros(self.m)
-            for v in self.V:
-                v_ind = self.V.index(v)
-                outneighbors = self.G[v].keys()
-                for w in outneighbors:
-                    w_ind = self.V.index(w)
-                    edge = self.E.index((v, w))
-                    if abs(self.labels[-1][v_ind] - self.labels[-1][w_ind] - self.c[-1][edge]) < self.eps:
-                        self.E_active[edge] = 1
+                self.E_active.append(np.zeros(self.m))
+                for v in self.V:
+                    v_ind = self.V.index(v)
+                    outneighbors = self.G[v].keys()
+                    for w in outneighbors:
+                        w_ind = self.V.index(w)
+                        edge = self.E.index((v, w))
+                        if abs(self.labels[-1][v_ind] - self.labels[-1][w_ind] - self.c[-1][edge]) < self.eps:
+                            self.E_active[-1][edge] = 1
 
+        for e in range(self.m):
+            if abs(self.fp[e][-1][1]) > self.eps:
+                self.fp[e].append((theta - next_phase, 0))
+                self.fp_ind[e].append(theta_ind)
+            if abs(self.fm[e][-1][1]) > self.eps:
+                self.fm[e].append((theta - next_phase + self.q_global[-1][e]/self.nu[e] + self.r[e], 0))
+
+        OutputTable(self.V, self.E, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase,
+                    theta - next_phase, self.c, self.labels)
         return 0
 
