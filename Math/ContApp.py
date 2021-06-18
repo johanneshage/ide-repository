@@ -1,8 +1,7 @@
 import numpy as np
 import scipy.integrate as integrate
-from scipy.optimize import minimize, LinearConstraint, Bounds
+from scipy.optimize import minimize, Bounds
 from Graphics.OutputTable import OutputTable
-
 
 
 class ContApp:
@@ -57,6 +56,7 @@ class ContApp:
         for e in self.E:  # Initialisierung "self.c" (Kosten)
             self.c[0][self.E.index(e)] = self.r[self.E.index(e)]
 
+        # Zeitpunkte, zu denen sich der Zufluss in mindestens einem Quellknoten ändert
         self.u_start = set()
         for s_list in self.u:
             for t in s_list:
@@ -80,7 +80,8 @@ class ContApp:
         self.del_plus_label = np.zeros(self.n)
         self.main()
 
-    # Quelle: https://www.geeksforgeeks.org/topological-sorting/#:~:text=Topological%20sorting%20for%20Directed%20Acyclic,4%202%203%201%200%E2%80%9D.
+    # Quelle:
+    # https://www.geeksforgeeks.org/topological-sorting/#:~:text=Topological%20sorting%20for%20Directed%20Acyclic,4%202%203%201%200%E2%80%9D.
     # A recursive function used by topologicalSort
     def topologicalSortUtil(self, v, visited, stack):
         # Mark the current node as visited.
@@ -231,9 +232,8 @@ class ContApp:
             """
             b = 0
             v_ind = self.V.index(v)
-            active_paths = self.get_ingoing_active_edges(v)
-            for e in active_paths:
-                e_ind = self.E.index(e)
+            in_paths = self.get_ingoing_edges(v)
+            for e_ind in in_paths:
                 phase_ind = 0
                 if phase > self.fm[e_ind][-1][0]:
                     phase_ind = len(self.fm[e_ind]) - 1
@@ -250,7 +250,7 @@ class ContApp:
                     b += u_v[tuple_ind][1]
                     break
             return sum(x[:]) - b
-            #return LinearConstraint(np.ones(len(x)), b, b)
+            # return LinearConstraint(np.ones(len(x)), b, b)
 
         con = {'type':'eq', 'fun': constraint}
 
@@ -264,28 +264,28 @@ class ContApp:
         """
         bestimmt alle in 'v' eingehenden Kanten
         :param v: Knoten
-        :return: Liste der Kanten
+        :return: Liste der Indizes der Kanten
         """
         preds = self.graphReversed[v].keys()
-        return [(u,v) for u in preds]
+        return [self.E.index((u,v)) for u in preds]
 
     def get_ingoing_active_edges(self, v):
         """
         bestimmt alle in 'v' eingehende, momentan aktive Kanten
         :param v: Knoten
-        :return: Liste der aktiven Kanten
+        :return: Liste der Indizes der aktiven Kanten
         """
         preds = self.graphReversed[v].keys()
         delta_m = [self.E.index((u,v)) for u in preds]
-        return [self.E[e] for e in delta_m if self.E_active[-1][e]]
+        return [e for e in delta_m if self.E_active[-1][e]]
 
     def get_outgoing_edges(self, v):
         """
         bestimmt alle aus 'v' ausgehenden Kanten
         :param v: Knoten
-        :return: Liste der Kanten
+        :return: Liste der Indizes der Kanten
         """
-        return [(v,u) for u in self.G[v].keys()]
+        return [self.E.index((v,u)) for u in self.G[v].keys()]
 
     def get_outgoing_active_edges(self, v):
         """
@@ -294,7 +294,7 @@ class ContApp:
         :return: Liste der aktiven Kanten
         """
         delta_p = [self.E.index((v,u)) for u in self.G[v].keys()]
-        return [self.E[e] for e in delta_p if self.E_active[-1][e]]
+        return [e for e in delta_p if self.E_active[-1][e]]
 
     def change_of_label(self, e, phase, z):
         """
@@ -310,15 +310,14 @@ class ContApp:
             return (z - self.nu[e_ind])/self.nu[e_ind] + self.del_plus_label[tar_ind]
         return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0]) + self.del_plus_label[tar_ind]
 
-    def change_of_cost(self, e, phase, z):
+    def change_of_cost(self, e_ind, phase, z):
         """
-        Gibt die momentane Kostenänderung der Kante 'e' bei Zufluss 'z' an.
-        :param e: Betrachtete Kante
+        Gibt die momentane Kostenänderung der Kante mit Index 'e_ind' bei Zufluss 'z' an.
+        :param e_ind: Index der betrachteten Kante
         :param phase: Betrachteter Zeitpunkt
         :param z: Einflussrate in Kante 'e'
         :return: Änderungsrate der Kosten
         """
-        e_ind = self.E.index(e)
         if self.q_global[self.global_phase.index(phase)][e_ind] > 0:
             return (z - self.nu[e_ind])/self.nu[e_ind]
         return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0])
@@ -328,32 +327,35 @@ class ContApp:
         T = 100
         # Aufteilung des Flusses
         x_total = np.zeros(self.m)
+        stop_outflow = []
         while theta < T:
+            # in der Zukunft liegende Zeitpunkte aus der Liste 'self.u_start'
             start_points = [t for t in self.u_start if t > theta]
+            # in der Zukunft liegende Zeitpunkte, zu denen der f^- -Wert von mindestens einer Kante auf 0 springt (wird
+            # während der Laufzeit aktualisiert
+            stop_outflow = [t for t in stop_outflow if t > theta]
             top_ord = self.topologicalSort()
             theta_ind = self.global_phase.index(theta)
+            # Liste aller Kanten, deren Warteschlange in der aktuellen Phase 0 wird, und deren f^- -Werte somit auf 0
+            # gesetzt werden müssen
+            fm_to_zero = []
             # 'next_phase' bestimmt am Ende der Schleife, wie lange aktuelle Phase andauert
-            if len(start_points) > 0:
-                next_phase = np.min(start_points)
+            if len(start_points) > 0 or len(stop_outflow) > 0:
+                next_phase = np.min(start_points + stop_outflow) - theta
             else:
                 next_phase = T
             for v in top_ord:
+                # Flussaufteilung des im Knoten 'v' vorhandenen Flussvolumens
                 x = self.opt(v, theta)
-                if isinstance(x, int) or isinstance(x, float):
-                    if x == 0:
-                        continue
-                elif len(x) == 1 and x[0] == 0:
-                    continue
                 active_paths = self.get_outgoing_active_edges(v)
-                for e in active_paths:
-                    e_ind = self.E.index(e)
-                    e_act_ind = active_paths.index(e)
-                    x_total[e_ind] = x[e_act_ind]
+                for e_ind in active_paths:
+                    e = self.E[e_ind]
+                    x_total[e_ind] = x[active_paths.index(e_ind)]
 
                     if theta == 0:
-                        start_ind = self.V.index(self.E[e_ind][0])
+                        start_ind = self.V.index(e[0])
                         if len(self.u[start_ind]) > 0 and self.u[start_ind][0][0] == 0:
-                            self.fp[e_ind][0] = ((0, x_total[e_ind]))
+                            self.fp[e_ind][0] = (0, x_total[e_ind])
                             self.fp_ind[e_ind].append(0)
                     elif abs(self.fp[e_ind][-1][1] - x_total[e_ind]) > self.eps:
                         self.fp[e_ind].append((theta, x_total[e_ind]))
@@ -365,72 +367,86 @@ class ContApp:
                     if abs(self.fm[e_ind][-1][1] - outflow) > self.eps:
                         self.fm[e_ind].append((theta + self.r[e_ind], outflow))
 
+                    # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
                     if 0 < self.fm[e_ind][-1][0] - theta < next_phase:
                         next_phase = self.fm[e_ind][-1][0] - theta
+                        # wird zurückgesetzt, da durch Verkürzung der Phase f^- -Wert erst in einer späteren Phase neu
+                        # gesetzt wird
+                        fm_to_zero = []
 
-                    change = self.change_of_cost(e, theta, x[e_act_ind])
-                    self.del_plus_label[self.V.index(e[0])] = change + self.del_plus_label[self.V.index(e[1])]
-                    # Falls die Warteschlange von 'e' unter aktuellem Fluss abgebaut wird, bestimme Zeitpunkt, zu dem
-                    # diese vollständig abgebaut ist (bei gleich bleibendem Fluss)
-                    if change < 0:
+                    change_of_q = self.change_of_cost(e_ind, theta, x[active_paths.index(e_ind)]) * self.nu[e_ind]
+                    self.del_plus_label[self.V.index(e[0])] = change_of_q + self.del_plus_label[self.V.index(e[1])]
+                    # Falls die Warteschlange von 'e' unter aktuellem Fluss abgebaut wird, bestimme Zeitpunkt, zu
+                    # dem diese vollständig abgebaut ist (bei gleich bleibendem Fluss)
+                    if change_of_q < -self.eps:
                         # 'phase_length': Dauer bis Warteschlangenlänge gleich 0
-                        phase_length = - self.q_global[theta_ind][self.E.index(e)] / change
-                        if phase_length < next_phase:
+                        phase_length = - self.q_global[theta_ind][e_ind] / change_of_q
+                        # phase_length < next_phase
+                        if phase_length < next_phase - self.eps:
                             next_phase = phase_length
+                            fm_to_zero = [e_ind]
+                        # phase_length == next_phase
+                        elif abs(phase_length - next_phase) < self.eps:
+                            fm_to_zero.append(e_ind)
 
                 delta_p = self.get_outgoing_edges(v)
                 inactive_paths = [e for e in delta_p if e not in active_paths]
-                active = active_paths[0]  # aktive Kante
-                active_ind = self.E.index(active)
-                active_change = self.change_of_cost(active, theta, x[0])  # Änderung der Kosten dieser Kante
-                for e in inactive_paths:
-                    e_ind = self.E.index(e)
+                for e_ind in inactive_paths:
                     x_total[e_ind] = 0
                     if abs(self.fp[e_ind][-1][1]) > self.eps:
                         self.fp[e_ind].append((theta, 0))
                         self.fp_ind[e_ind].append(theta_ind)
 
-                    change = self.change_of_cost(e, theta, 0)
+                    change_of_q = self.change_of_cost(e_ind, theta, 0) * self.nu[e_ind]
                     # Falls Warteschlange existiert (und somit abgebaut wird da inaktiv), bestimme Zeitpunkt, zu dem
                     # diese vollständig abgebaut ist
-                    if change < 0:
-                        phase_length = -self.q_global[theta_ind][self.E.index(e)]/change
-                        if phase_length < next_phase:
+                    if change_of_q < -self.eps:
+                        phase_length = -self.q_global[theta_ind][e_ind] / change_of_q
+                        # phase_length < next_phase
+                        if phase_length < next_phase - self.eps:
                             next_phase = phase_length
-                    # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
-                    tar_ind = self.V.index(e[1])
-                    act_ind = self.V.index(active[1])
-                    if self.labels[theta_ind][tar_ind] + self.r[e_ind] + change * next_phase < \
-                            self.labels[theta_ind][act_ind] + self.r[active_ind] + active_change * next_phase and \
-                            abs(change - active_change) > self.eps:
-                        time_ub = np.abs((self.labels[theta_ind][act_ind] + self.r[e_ind] -
-                                          self.labels[theta_ind][tar_ind] - self.r[active_ind]) /
-                                         (change - active_change))
-                        if time_ub < next_phase:
-                            next_phase = time_ub
+                            fm_to_zero = [e_ind]
+                        # phase_length == next_phase
+                        elif abs(phase_length - next_phase) < self.eps:
+                            fm_to_zero.append(e_ind)
+
+                if len(active_paths) > 0:
+                    active_ind = active_paths[0]  # aktive Kante
+                    active_change = self.change_of_cost(active_ind, theta, x[0])  # Änderung der Kosten dieser Kante
+                    for e_ind in inactive_paths:
+                        change = self.change_of_cost(e_ind, theta, 0)
+                        # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
+                        tar_ind = self.V.index(self.E[e_ind][1])
+                        act_ind = self.V.index(self.E[active_ind][1])
+                        if self.labels[theta_ind][tar_ind] + self.r[e_ind] + change * next_phase < \
+                                self.labels[theta_ind][act_ind] + self.r[active_ind] + active_change * next_phase and \
+                                abs(change - active_change) > self.eps:
+                            time_ub = np.abs((self.labels[theta_ind][act_ind] + self.r[e_ind] -
+                                              self.labels[theta_ind][tar_ind] - self.r[active_ind]) /
+                                             (change - active_change))
+                            if time_ub < next_phase:
+                                next_phase = time_ub
+                                # wird zurückgesetzt, da durch Verkürzung der Phase f^- -Wert erst in einer späteren
+                                # Phase neu gesetzt wird
+                                fm_to_zero = []
 
             if next_phase != T:
+                # aktualisiere Warteschlangenlängen und Kosten
                 new_q_global = []
                 self.c.append(np.zeros(self.m))
-                for e in self.E:
-                    ind = self.E.index(e)
-                    new_q_global.append(self.q_global[theta_ind][ind] + self.change_of_cost(e, theta, x_total[ind]) *
-                                        self.nu[ind] * next_phase)
-                    # überprüfe, ob Warteschlange von 'e' in dieser Phase vollständig abgebaut wird und 'e' inaktiv ist,
-                    # dann muss f^-(e) auf 0 gesetzt werden
-                    if self.q_global[theta_ind][ind] > 0 and abs(new_q_global[-1]) < self.eps and abs(x_total[ind]) < self.eps:
-                        self.fm[ind].append((theta + next_phase, 0))
-                    self.c[-1][ind] = new_q_global[-1] / self.nu[ind] + self.r[ind]
+                for e_ind in range(self.m):
+                    new_q_global.append(self.q_global[theta_ind][e_ind] +
+                                        self.change_of_cost(e_ind, theta, x_total[e_ind]) * self.nu[e_ind] * next_phase)
+                    self.c[-1][e_ind] = new_q_global[-1] / self.nu[e_ind] + self.r[e_ind]
                 # speichere aktuelle Warteschlangenlängen
                 self.q_global.append(new_q_global)
 
-            print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, " :")
+            print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, ":")
             for v_ind in range(self.n):
                 out_neighbors = self.get_outgoing_edges(top_ord[v_ind])
-                for e in out_neighbors:
-                    e_ind = self.E.index(e)
+                for e_ind in out_neighbors:
                     if x_total[e_ind] > 0:
-                        print(e, x_total[self.E.index(e)])
+                        print(self.E[e_ind], x_total[e_ind])
 
             theta += next_phase
             if next_phase != T:
@@ -449,12 +465,15 @@ class ContApp:
                         if abs(self.labels[-1][v_ind] - self.labels[-1][w_ind] - self.c[-1][edge]) < self.eps:
                             self.E_active[-1][edge] = 1
 
+                for e_ind in fm_to_zero:
+                    self.fm[e_ind].append((theta + self.r[e_ind], 0))
+                    stop_outflow.append(theta + self.r[e_ind])
+
+        # am Ende sind alle f^+ -Werte 0
         for e in range(self.m):
             if abs(self.fp[e][-1][1]) > self.eps:
                 self.fp[e].append((theta - next_phase, 0))
                 self.fp_ind[e].append(theta_ind)
-            if abs(self.fm[e][-1][1]) > self.eps:
-                self.fm[e].append((theta - next_phase + self.q_global[-1][e]/self.nu[e] + self.r[e], 0))
 
         OutputTable(self.V, self.E, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase,
                     theta - next_phase, self.c, self.labels)
