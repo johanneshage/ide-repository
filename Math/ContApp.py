@@ -207,58 +207,120 @@ class ContApp:
         return self.q_global[self.global_phase.index(global_theta)][e] + epsilon*(self.fp[e][global_theta] - self.nu[e])
     '''
 
-    def opt(self, v, phase):
+    def waterfilling_algo(self, v, b, outneighbors, w_slope):
         """
-        Optimierungsproblem für Knoten 'v' zur Bestimmung der Verteilung des in der aktuellen 'phase' eintreffenden
-        Flusses.
+
         :param v:
-        :param phase:
-        :return: Vektor x_e mit Eintrag für jede von 'v' ausgehende aktive Kante
+        :param b:
+        :param outneighbors:
+        :param w_slope:
+        :return:
         """
-        neighbors = self.G[v].keys()
-        delta_p = [self.E.index((v,w)) for w in neighbors]
-        active_paths = [self.E[e] for e in delta_p if self.E_active[-1][e]]
-        if len(active_paths) == 0:
-            return 0
-        x0 = np.zeros(len(active_paths))
-        bound = Bounds(np.zeros(len(active_paths)), len(active_paths) * [np.inf])
+        pk = len(outneighbors)
+        if pk == 0:
+            return []
+        alpha = np.zeros(pk)
+        beta = np.copy(w_slope)
+        gamma = np.zeros(pk)
+        old_sorting = np.zeros(pk)
 
-        def constraint(x):
-            """
-            Berechnung des Vektors b_v^-(phase) und Nebenbedingung \sum_{i=1}^{p_k} x_{vw_i} = b_v^-(phase) für
-            Optimierungsproblem OPT-b_v^-(phase)
-            :param x: Optimierungsvariable
-            :return: Gleichheits - Nebenbedingung
-            """
-            b = 0
-            v_ind = self.V.index(v)
-            in_paths = self.get_ingoing_edges(v)
-            for e_ind in in_paths:
-                phase_ind = 0
-                if phase > self.fm[e_ind][-1][0]:
-                    phase_ind = len(self.fm[e_ind]) - 1
-                else:
-                    while phase > self.fm[e_ind][phase_ind][0]:
-                        phase_ind += 1
-                    if phase < self.fm[e_ind][phase_ind][0]:
-                        phase_ind -= 1
-                b += self.fm[e_ind][phase_ind][1]
-            u_v = self.u[v_ind]
-            u_v_len = len(u_v)
-            for tuple_ind in range(u_v_len - 1, -1, -1):
-                if u_v[tuple_ind][0] <= phase:
-                    b += u_v[tuple_ind][1]
-                    break
-            return sum(x[:]) - b
-            # return LinearConstraint(np.ones(len(x)), b, b)
+        # setze 'beta' - Werte
+        for i in range(pk):
+            e_ind = self.E.index((v, outneighbors[i]))
+            if self.q_global[-1][e_ind] > 0:
+                beta[i] -= 1
+            old_sorting[i] += i
 
-        con = {'type':'eq', 'fun': constraint}
+        # sortiere 'beta' und 'outneighbors', sodass 'beta' - Werte aufsteigend
+        zipped = sorted(zip(beta, outneighbors, old_sorting))
+        # beta, outneighbors, old_sorting = zipped[0], zipped[1], zipped[2]
+        beta = [element for element, _, _ in zipped]
+        outneighbors = [element for _, element, _ in zipped]
+        old_sorting = [element for _, _, element in zipped]
 
-        def objective(x):
-            return sum([integrate.quad(lambda z: self.change_of_label(e, phase, z), 0, x[active_paths.index(e)])[0] for
-                        e in active_paths])
+        # setze 'alpha'- und 'gamma' - Werte (mit der neuen Sortierung)
+        for i in range(pk):
+            e_ind = self.E.index((v, outneighbors[i]))
+            alpha[i] += self.nu[e_ind]
+            if self.q_global[-1][e_ind] == 0:
+                gamma[i] += self.nu[e_ind]
 
-        return minimize(objective, x0, method='SLSQP',bounds=bound, constraints=con).x
+        # h = lambda i, z: beta[i] + np.max([0, 1.0/alpha[i] * (z - gamma[i])])
+
+        # Beginn des Algorithmus
+        z = np.zeros(pk)
+        find_max = lambda i, r: alpha[i] * (beta[r] - beta[i]) + gamma[i]  # Bestimmt max{z | h_i(z) <= beta_r}
+        r = 0
+        for r in range(1, pk + 1):
+            sum = 0
+            for i in range(r):
+                sum += find_max(i, r - 1)
+            if sum > b:
+                r -= 1
+                break
+        if r == pk + 1:
+            r -= 1
+
+        else_case = False
+        if r < pk:
+            sum = 0
+            for i in range(r):
+                sum += find_max(i, r)
+            if sum <= b:
+                z_sum = 0
+                for i in range(r):
+                    z[i] += find_max(i, r)
+                    z_sum += z[i]
+                z_sum -= z[r - 1]
+                z[r] += b - z_sum
+            else:
+                else_case = True
+        else:
+            else_case = True
+
+        if else_case:
+            z_sum = 0
+            for i in range(r):
+                z[i] += find_max(i, r - 1)
+                z_sum += z[i]
+            b_prime = b - z_sum
+            if r == 1:
+                z[0] += b_prime
+            else:
+                alpha_sum = 0
+                # for j in range(r - 1):
+                for j in range(r):
+                    alpha_sum += alpha[j]
+                for i in range(r):
+                    z[i] += b_prime * (alpha[i] + 0.0)/alpha_sum
+
+        # sortiere 'z' nach der ursprünglichen Sortierung
+        zipped = sorted(zip(old_sorting, z))
+        z = [element for _, element in zipped]
+        return z
+
+    def calc_b(self, v, phase):
+        """
+        Berechnet zum Zeitpunkt 'phase' im Knoten 'v' vorhandene Flussmenge b_v^- (phase)
+        :param v: Knoten
+        :param phase: Zeitpunkt
+        :return: b_v^- (phase)
+        """
+        b = 0
+        v_ind = self.V.index(v)
+        in_paths = self.get_ingoing_edges(v)
+        for e_ind in in_paths:
+            ind = self.last_fm_change(e_ind, phase)
+            if len(self.fm[e_ind]) > ind + 1 and abs(self.fm[e_ind][ind + 1][0] - phase) < self.eps:
+                ind += 1
+            b += self.fm[e_ind][ind][1]
+        u_v = self.u[v_ind]
+        u_v_len = len(u_v)
+        for tuple_ind in range(u_v_len - 1, -1, -1):
+            if u_v[tuple_ind][0] <= phase:
+                b += u_v[tuple_ind][1]
+                break
+        return b
 
     def get_ingoing_edges(self, v):
         """
@@ -306,7 +368,7 @@ class ContApp:
         """
         e_ind = self.E.index(e)
         tar_ind = self.V.index(e[1])
-        if self.q_global[self.global_phase.index(phase)][e_ind] > 0:
+        if self.q_global[self.global_phase.index(phase)][e_ind] > self.eps:
             return (z - self.nu[e_ind])/self.nu[e_ind] + self.del_plus_label[tar_ind]
         return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0]) + self.del_plus_label[tar_ind]
 
@@ -318,9 +380,22 @@ class ContApp:
         :param z: Einflussrate in Kante 'e'
         :return: Änderungsrate der Kosten
         """
-        if self.q_global[self.global_phase.index(phase)][e_ind] > 0:
+        if self.q_global[self.global_phase.index(phase)][e_ind] > self.eps:
             return (z - self.nu[e_ind])/self.nu[e_ind]
         return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0])
+
+    def last_fm_change(self, e_ind, theta):
+        """
+        Bestimmt den größten Zeitpunkt <= 'theta', zu dem sich der f^- -Wert von Kante 'e_ind' ändert
+        :param e_ind: Kantenindex
+        :param theta: aktueller Zeitpunkt
+        :return: Index des gesuchten Zeitpunkts
+        """
+        fm_len = len(self.fm[e_ind])
+        for t in range(fm_len - 1, 0, -1):
+            if self.fm[e_ind][t][0] < theta + self.eps:
+                return t
+        return 0
 
     def main(self):
         theta = 0
@@ -346,8 +421,10 @@ class ContApp:
                 next_phase = T
             for v in top_ord:
                 # Flussaufteilung des im Knoten 'v' vorhandenen Flussvolumens
-                x = self.opt(v, theta)
                 active_paths = self.get_outgoing_active_edges(v)
+                active_neighbors = [self.E[e][1] for e in active_paths]
+                w_slope = [self.del_plus_label[self.V.index(node)] for node in active_neighbors]
+                x = self.waterfilling_algo(v, self.calc_b(v, theta), active_neighbors, w_slope)
                 for e_ind in active_paths:
                     e = self.E[e_ind]
                     x_total[e_ind] = x[active_paths.index(e_ind)]
@@ -357,6 +434,7 @@ class ContApp:
                         if len(self.u[start_ind]) > 0 and self.u[start_ind][0][0] == 0:
                             self.fp[e_ind][0] = (0, x_total[e_ind])
                             self.fp_ind[e_ind].append(0)
+                    # falls sich f^+ -Wert in dieser Phase ändert, aktualisiere 'self.fp'
                     elif abs(self.fp[e_ind][-1][1] - x_total[e_ind]) > self.eps:
                         self.fp[e_ind].append((theta, x_total[e_ind]))
                         self.fp_ind[e_ind].append(theta_ind)
@@ -364,14 +442,18 @@ class ContApp:
                         outflow = self.nu[e_ind]
                     else:
                         outflow = np.min([x_total[e_ind], self.nu[e_ind]])
-                    if abs(self.fm[e_ind][-1][1] - outflow) > self.eps:
+                    fm_ind = self.last_fm_change(e_ind, theta + self.r[e_ind])
+                    # falls sich f^- -Wert durch die Flussaufteilung in dieser Phase ändert, aktualisiere 'self.fm'
+                    if abs(self.fm[e_ind][fm_ind][1] - outflow) > self.eps:
                         self.fm[e_ind].append((theta + self.r[e_ind], outflow))
 
                     # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
-                    if 0 < self.fm[e_ind][-1][0] - theta < next_phase:
-                        next_phase = self.fm[e_ind][-1][0] - theta
-                        # wird zurückgesetzt, da durch Verkürzung der Phase f^- -Wert erst in einer späteren Phase neu
-                        # gesetzt wird
+                    last_fm_ind = self.last_fm_change(e_ind, theta)
+                    if len(self.fm[e_ind]) > last_fm_ind + 1 and \
+                            self.eps < self.fm[e_ind][last_fm_ind + 1][0] - theta < next_phase - self.eps:
+                        next_phase = self.fm[e_ind][last_fm_ind + 1][0] - theta
+                        # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase
+                        # neu gesetzt wird
                         fm_to_zero = []
 
                     change_of_q = self.change_of_cost(e_ind, theta, x[active_paths.index(e_ind)]) * self.nu[e_ind]
@@ -393,9 +475,19 @@ class ContApp:
                 inactive_paths = [e for e in delta_p if e not in active_paths]
                 for e_ind in inactive_paths:
                     x_total[e_ind] = 0
+                    # falls f^+ -Wert vorher > 0 war, so wird dieser hier auf 0 gesetzt, da Kante inaktiv
                     if abs(self.fp[e_ind][-1][1]) > self.eps:
                         self.fp[e_ind].append((theta, 0))
                         self.fp_ind[e_ind].append(theta_ind)
+
+                    # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
+                    last_fm_ind = self.last_fm_change(e_ind, theta)
+                    if len(self.fm[e_ind]) > last_fm_ind + 1 and \
+                            self.eps < self.fm[e_ind][last_fm_ind + 1][0] - theta < next_phase - self.eps:
+                        next_phase = self.fm[e_ind][last_fm_ind + 1][0] - theta
+                        # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase
+                        # neu gesetzt wird
+                        fm_to_zero = []
 
                     change_of_q = self.change_of_cost(e_ind, theta, 0) * self.nu[e_ind]
                     # Falls Warteschlange existiert (und somit abgebaut wird da inaktiv), bestimme Zeitpunkt, zu dem
@@ -418,12 +510,13 @@ class ContApp:
                         # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
                         tar_ind = self.V.index(self.E[e_ind][1])
                         act_ind = self.V.index(self.E[active_ind][1])
-                        if self.labels[theta_ind][tar_ind] + self.r[e_ind] + change * next_phase < \
-                                self.labels[theta_ind][act_ind] + self.r[active_ind] + active_change * next_phase and \
+                        if self.labels[theta_ind][tar_ind] + self.q_global[-1][e_ind] + self.r[e_ind] + change * \
+                                next_phase < self.labels[theta_ind][act_ind] + self.q_global[-1][active_ind] + \
+                                self.r[active_ind] + active_change * next_phase and \
                                 abs(change - active_change) > self.eps:
-                            time_ub = np.abs((self.labels[theta_ind][act_ind] + self.r[e_ind] -
-                                              self.labels[theta_ind][tar_ind] - self.r[active_ind]) /
-                                             (change - active_change))
+                            time_ub = np.abs((self.labels[theta_ind][tar_ind] + self.q_global[-1][e_ind] + self.r[e_ind]
+                                              - self.labels[theta_ind][act_ind] - self.q_global[-1][active_ind] -
+                                              self.r[active_ind]) / (active_change - change))
                             if time_ub < next_phase:
                                 next_phase = time_ub
                                 # wird zurückgesetzt, da durch Verkürzung der Phase f^- -Wert erst in einer späteren
@@ -475,6 +568,7 @@ class ContApp:
                 self.fp[e].append((theta - next_phase, 0))
                 self.fp_ind[e].append(theta_ind)
 
+        # erzeuge Ausgabe
         OutputTable(self.V, self.E, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase,
                     theta - next_phase, self.c, self.labels)
         return 0
