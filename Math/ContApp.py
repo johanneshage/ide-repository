@@ -32,6 +32,7 @@ class ContApp:
         self.items = G.items()
         self.keys = G.keys()
         self.eps = 10**(-4)  # Für Rundungsfehler
+        self.flow_vol = []  # merke Flusswerte in den einzelnen Knoten für OutputTable
 
         for delta in self.items:
             for w in list(delta[1].keys()):
@@ -185,36 +186,14 @@ class ContApp:
             graphReversed[v] = dictionary
         return graphReversed
 
-    '''
-    def q(self, e, global_theta, epsilon):
-        """
-        berechnet Warteschlangenlänge für Kante 'e' zum Zeitpunkt 'global_theta' + 'epsilon', unter der Voraussetzung,
-        dass Einflussrate zwischen den globalen Zeitpunkten linear
-        :param e: Kantenindex
-        :param global_theta: Startzeitpunkt der aktuellen globalen Phase
-        :param epsilon: Zeit seit beginn der aktuellen globalen Phase (insbesondere klein genug, dass keine neue
-        globale Phase begonnen hat)
-        :return: Länge der Warteschlange
-        """
-        if epsilon == 0:
-            return self.q_global[self.global_phase.index(global_theta)][e]
-
-        if self.q_global[self.global_phase.index(global_theta)][e] == 0:
-            if self.fp[e][global_theta] <= self.nu[e]:
-                return 0
-        # beachte: folgender Wert ist größer gleich 0, da sonst 'epsilon' ungültig, d.h. 'epsilon' ist so groß, dass
-        # 'global_theta' + 'epsilon' bereits in neuer globaler Phase liegt
-        return self.q_global[self.global_phase.index(global_theta)][e] + epsilon*(self.fp[e][global_theta] - self.nu[e])
-    '''
-
     def waterfilling_algo(self, v, b, outneighbors, w_slope):
         """
-
-        :param v:
-        :param b:
-        :param outneighbors:
-        :param w_slope:
-        :return:
+        Berechnet Flussaufteilung des in 'v' vorhandenen Flussvolumens auf die ausgehenden aktiven Kanten
+        :param v: Knoten
+        :param b: Flussmenge im Knoten 'v'
+        :param outneighbors: Liste aller Knoten, die über eine direkte aktive Kante von 'v' aus erreichbar sind
+        :param w_slope: Liste über Änderung der Labels aller Knoten in 'outneighbors'
+        :return: Flussaufteilung 'z' auf alle von 'v' ausgehenden aktiven Kanten
         """
         pk = len(outneighbors)
         if pk == 0:
@@ -249,7 +228,8 @@ class ContApp:
 
         # Beginn des Algorithmus
         z = np.zeros(pk)
-        find_max = lambda i, r: alpha[i] * (beta[r] - beta[i]) + gamma[i]  # Bestimmt max{z | h_i(z) <= beta_r}
+        # Bestimmt max{z | h_i(z) <= beta_r}, falls r >= i
+        find_max = lambda i, r: alpha[i] * (beta[r] - beta[i]) + gamma[i]
         r = 0
         for r in range(1, pk + 1):
             sum = 0
@@ -320,6 +300,8 @@ class ContApp:
             if u_v[tuple_ind][0] <= phase:
                 b += u_v[tuple_ind][1]
                 break
+        # speichere b - Wert für OutputTable
+        self.flow_vol[-1][v_ind] = b
         return b
 
     def get_ingoing_edges(self, v):
@@ -419,6 +401,7 @@ class ContApp:
                 next_phase = np.min(start_points + stop_outflow) - theta
             else:
                 next_phase = T
+            self.flow_vol.append(np.zeros(self.n))
             for v in top_ord:
                 # Flussaufteilung des im Knoten 'v' vorhandenen Flussvolumens
                 active_paths = self.get_outgoing_active_edges(v)
@@ -570,6 +553,6 @@ class ContApp:
 
         # erzeuge Ausgabe
         OutputTable(self.V, self.E, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase,
-                    theta - next_phase, self.c, self.labels)
+                    self.c, self.labels, self.flow_vol)
         return 0
 
