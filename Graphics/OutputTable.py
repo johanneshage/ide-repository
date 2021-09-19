@@ -378,7 +378,11 @@ class OutputTable(object):
                 q_entry = self.grid_entries[grid_ro][4]
                 q_entry.config(state='normal')
                 q_entry.delete(1.0, tk.END)
-                q_entry.insert('end', -1)
+                # berechne Rate, mit der Warteschlange abgebaut wird (abhängig von Einfluss < 'self.nu[ro]')
+                dq_dnu = - self.q[self.phase_ind][ro] / ((old_theta - theta) * self.nu[ro])
+                if -1 - self.eps < dq_dnu < -1 + self.eps:
+                    dq_dnu = -1.0
+                q_entry.insert('end', dq_dnu)
 
             fm_times = [t for (t, v) in self.fm[ro]]
             if theta in fm_times:

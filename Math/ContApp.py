@@ -1,6 +1,4 @@
 import numpy as np
-import scipy.integrate as integrate
-from scipy.optimize import minimize, Bounds
 from Graphics.OutputTable import OutputTable
 
 
@@ -31,7 +29,7 @@ class ContApp:
         self.u = u
         self.items = G.items()
         self.keys = G.keys()
-        self.eps = 10**(-4)  # Für Rundungsfehler
+        self.eps = 10**(-8)  # Für Rundungsfehler
         self.flow_vol = []  # merke Flusswerte in den einzelnen Knoten für OutputTable
 
         for delta in self.items:
@@ -82,9 +80,9 @@ class ContApp:
         self.main()
 
     # Quelle:
-    # https://www.geeksforgeeks.org/topological-sorting/#:~:text=Topological%20sorting%20for%20Directed%20Acyclic,4%202%203%201%200%E2%80%9D.
+    # https://www.geeksforgeeks.org/topological-sorting/#:~:text=Topological%20sorting%20for%20Directed%20Acyclic,4%202%203%201%200%E2%80%9D
     # A recursive function used by topologicalSort
-    def topologicalSortUtil(self, v, visited, stack):
+    def topologicalSortUtilActive(self, v, visited, stack):
         # Mark the current node as visited.
         visited[self.V.index(v)] = True
 
@@ -92,6 +90,36 @@ class ContApp:
         outneighbors = self.G[v]
         for w in outneighbors:
             if self.E_active[-1][self.E.index((v,w))] and not visited[self.V.index(w)]:
+                self.topologicalSortUtilActive(w, visited, stack)
+
+        # Push current vertex to stack which stores result
+        stack.append(v)
+
+    # The function to do Topological Sort. It uses recursive
+    # topologicalSortUtil()
+    def topologicalSortActive(self):
+        # Mark all the vertices as not visited
+        visited = [False]*self.n
+        visited[self.V.index('t1')] = True
+        stack = ['t1']
+
+        # Call the recursive helper function to store Topological
+        # Sort starting from all vertices one by one
+        for i in range(self.n):
+            if not visited[i]:
+                self.topologicalSortUtilActive(self.V[i], visited, stack)
+        return stack
+
+    # A recursive function used by topologicalSort
+    def topologicalSortUtil(self, v, visited, stack):
+
+        # Mark the current node as visited.
+        visited[self.V.index(v)] = True
+
+        # Recur for all the vertices adjacent to this vertex
+        for w in self.G[v]:
+            i = self.V.index(w)
+            if visited[i] == False:
                 self.topologicalSortUtil(w, visited, stack)
 
         # Push current vertex to stack which stores result
@@ -108,7 +136,7 @@ class ContApp:
         # Call the recursive helper function to store Topological
         # Sort starting from all vertices one by one
         for i in range(self.n):
-            if not visited[i]:
+            if visited[i] == False:
                 self.topologicalSortUtil(self.V[i], visited, stack)
         return stack
 
@@ -251,7 +279,7 @@ class ContApp:
                 for i in range(r):
                     z[i] += find_max(i, r)
                     z_sum += z[i]
-                z_sum -= z[r - 1]
+                # z_sum -= z[r - 1]
                 z[r] += b - z_sum
             else:
                 else_case = True
@@ -389,11 +417,12 @@ class ContApp:
             # in der Zukunft liegende Zeitpunkte aus der Liste 'self.u_start'
             start_points = [t for t in self.u_start if t > theta]
             # in der Zukunft liegende Zeitpunkte, zu denen der f^- -Wert von mindestens einer Kante auf 0 springt (wird
-            # während der Laufzeit aktualisiert
+            # während der Laufzeit aktualisiert)
             stop_outflow = [t for t in stop_outflow if t > theta]
+            top_ord_act = self.topologicalSortActive()
             top_ord = self.topologicalSort()
             theta_ind = self.global_phase.index(theta)
-            # Liste aller Kanten, deren Warteschlange in der aktuellen Phase 0 wird, und deren f^- -Werte somit auf 0
+            # Liste aller Kanten, deren Warteschlange in der aktuellen Phase 0 wird, und deren f^- -Werte auf 0
             # gesetzt werden müssen
             fm_to_zero = []
             # 'next_phase' bestimmt am Ende der Schleife, wie lange aktuelle Phase andauert
@@ -408,6 +437,7 @@ class ContApp:
                 active_neighbors = [self.E[e][1] for e in active_paths]
                 w_slope = [self.del_plus_label[self.V.index(node)] for node in active_neighbors]
                 x = self.waterfilling_algo(v, self.calc_b(v, theta), active_neighbors, w_slope)
+                firstedge = True
                 for e_ind in active_paths:
                     e = self.E[e_ind]
                     x_total[e_ind] = x[active_paths.index(e_ind)]
@@ -421,7 +451,7 @@ class ContApp:
                     elif abs(self.fp[e_ind][-1][1] - x_total[e_ind]) > self.eps:
                         self.fp[e_ind].append((theta, x_total[e_ind]))
                         self.fp_ind[e_ind].append(theta_ind)
-                    if self.q_global[theta_ind][e_ind] > 0:
+                    if self.q_global[theta_ind][e_ind] > self.eps:
                         outflow = self.nu[e_ind]
                     else:
                         outflow = np.min([x_total[e_ind], self.nu[e_ind]])
@@ -439,8 +469,12 @@ class ContApp:
                         # neu gesetzt wird
                         fm_to_zero = []
 
-                    change_of_q = self.change_of_cost(e_ind, theta, x[active_paths.index(e_ind)]) * self.nu[e_ind]
-                    self.del_plus_label[self.V.index(e[0])] = change_of_q + self.del_plus_label[self.V.index(e[1])]
+                    change_of_c = self.change_of_cost(e_ind, theta, x[active_paths.index(e_ind)])
+                    change_of_q = change_of_c * self.nu[e_ind]
+                    new_del_plus = change_of_c + self.del_plus_label[self.V.index(e[1])]
+                    if firstedge or new_del_plus < self.del_plus_label[self.V.index(e[0])]:
+                        self.del_plus_label[self.V.index(e[0])] = new_del_plus
+                        firstedge = False
                     # Falls die Warteschlange von 'e' unter aktuellem Fluss abgebaut wird, bestimme Zeitpunkt, zu
                     # dem diese vollständig abgebaut ist (bei gleich bleibendem Fluss)
                     if change_of_q < -self.eps:
@@ -449,9 +483,11 @@ class ContApp:
                         # phase_length < next_phase
                         if phase_length < next_phase - self.eps:
                             next_phase = phase_length
-                            fm_to_zero = [e_ind]
+                            # prüfe ob Zufluss 0 und somit 'fm' auf 0 gesetzt werden muss
+                            if change_of_q + self.nu[e_ind] < self.eps:
+                                fm_to_zero = [e_ind]
                         # phase_length == next_phase
-                        elif abs(phase_length - next_phase) < self.eps:
+                        elif max([abs(phase_length - next_phase), change_of_q + self.nu[e_ind]]) < self.eps:
                             fm_to_zero.append(e_ind)
 
                 delta_p = self.get_outgoing_edges(v)
@@ -480,9 +516,11 @@ class ContApp:
                         # phase_length < next_phase
                         if phase_length < next_phase - self.eps:
                             next_phase = phase_length
-                            fm_to_zero = [e_ind]
+                            # prüfe ob Zufluss 0 und somit 'fm' auf 0 gesetzt werden muss
+                            if change_of_q + self.nu[e_ind] < self.eps:
+                                fm_to_zero = [e_ind]
                         # phase_length == next_phase
-                        elif abs(phase_length - next_phase) < self.eps:
+                        elif max([abs(phase_length - next_phase), change_of_q + self.nu[e_ind]]) < self.eps:
                             fm_to_zero.append(e_ind)
 
                 if len(active_paths) > 0:
@@ -493,13 +531,16 @@ class ContApp:
                         # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
                         tar_ind = self.V.index(self.E[e_ind][1])
                         act_ind = self.V.index(self.E[active_ind][1])
-                        if self.labels[theta_ind][tar_ind] + self.q_global[-1][e_ind] + self.r[e_ind] + change * \
-                                next_phase < self.labels[theta_ind][act_ind] + self.q_global[-1][active_ind] + \
-                                self.r[active_ind] + active_change * next_phase and \
-                                abs(change - active_change) > self.eps:
-                            time_ub = np.abs((self.labels[theta_ind][tar_ind] + self.q_global[-1][e_ind] + self.r[e_ind]
-                                              - self.labels[theta_ind][act_ind] - self.q_global[-1][active_ind] -
-                                              self.r[active_ind]) / (active_change - change))
+                        if self.labels[theta_ind][tar_ind] + self.q_global[-1][e_ind]/self.nu[e_ind] + self.r[e_ind] + \
+                                (change + self.del_plus_label[tar_ind]) * next_phase < \
+                                self.labels[theta_ind][act_ind] + self.q_global[-1][active_ind]/self.nu[active_ind] + \
+                                self.r[active_ind] + (active_change + self.del_plus_label[act_ind]) * next_phase and \
+                                abs(change + self.del_plus_label[tar_ind] - active_change - self.del_plus_label[act_ind])\
+                                > self.eps:
+                            time_ub = np.abs((self.labels[theta_ind][tar_ind] + self.q_global[-1][e_ind]/self.nu[e_ind]
+                                              + self.r[e_ind] - self.labels[theta_ind][act_ind]
+                                              - self.q_global[-1][active_ind]/self.nu[active_ind] - self.r[active_ind])
+                                             / (active_change + self.del_plus_label[act_ind] - change - self.del_plus_label[tar_ind]))
                             if time_ub < next_phase:
                                 next_phase = time_ub
                                 # wird zurückgesetzt, da durch Verkürzung der Phase f^- -Wert erst in einer späteren
@@ -511,15 +552,18 @@ class ContApp:
                 new_q_global = []
                 self.c.append(np.zeros(self.m))
                 for e_ind in range(self.m):
-                    new_q_global.append(self.q_global[theta_ind][e_ind] +
-                                        self.change_of_cost(e_ind, theta, x_total[e_ind]) * self.nu[e_ind] * next_phase)
+                    next_q_len = self.q_global[theta_ind][e_ind] + \
+                                 self.change_of_cost(e_ind, theta, x_total[e_ind]) * self.nu[e_ind] * next_phase
+                    if next_q_len < self.eps:
+                        next_q_len = 0
+                    new_q_global.append(next_q_len)
                     self.c[-1][e_ind] = new_q_global[-1] / self.nu[e_ind] + self.r[e_ind]
                 # speichere aktuelle Warteschlangenlängen
                 self.q_global.append(new_q_global)
 
             print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, ":")
             for v_ind in range(self.n):
-                out_neighbors = self.get_outgoing_edges(top_ord[v_ind])
+                out_neighbors = self.get_outgoing_edges(top_ord_act[v_ind])
                 for e_ind in out_neighbors:
                     if x_total[e_ind] > 0:
                         print(self.E[e_ind], x_total[e_ind])
