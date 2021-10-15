@@ -82,35 +82,6 @@ class ContApp:
     # Quelle:
     # https://www.geeksforgeeks.org/topological-sorting/#:~:text=Topological%20sorting%20for%20Directed%20Acyclic,4%202%203%201%200%E2%80%9D
     # A recursive function used by topologicalSort
-    def topologicalSortUtilActive(self, v, visited, stack):
-        # Mark the current node as visited.
-        visited[self.V.index(v)] = True
-
-        # Recur for all the vertices adjacent to this vertex
-        outneighbors = self.G[v]
-        for w in outneighbors:
-            if self.E_active[-1][self.E.index((v,w))] and not visited[self.V.index(w)]:
-                self.topologicalSortUtilActive(w, visited, stack)
-
-        # Push current vertex to stack which stores result
-        stack.append(v)
-
-    # The function to do Topological Sort. It uses recursive
-    # topologicalSortUtil()
-    def topologicalSortActive(self):
-        # Mark all the vertices as not visited
-        visited = [False]*self.n
-        visited[self.V.index('t1')] = True
-        stack = ['t1']
-
-        # Call the recursive helper function to store Topological
-        # Sort starting from all vertices one by one
-        for i in range(self.n):
-            if not visited[i]:
-                self.topologicalSortUtilActive(self.V[i], visited, stack)
-        return stack
-
-    # A recursive function used by topologicalSort
     def topologicalSortUtil(self, v, visited, stack):
 
         # Mark the current node as visited.
@@ -119,7 +90,7 @@ class ContApp:
         # Recur for all the vertices adjacent to this vertex
         for w in self.G[v]:
             i = self.V.index(w)
-            if visited[i] == False:
+            if not visited[i]:
                 self.topologicalSortUtil(w, visited, stack)
 
         # Push current vertex to stack which stores result
@@ -136,8 +107,37 @@ class ContApp:
         # Call the recursive helper function to store Topological
         # Sort starting from all vertices one by one
         for i in range(self.n):
-            if visited[i] == False:
+            if not visited[i]:
                 self.topologicalSortUtil(self.V[i], visited, stack)
+        return stack
+
+    # Analog zu 'topologicalSortUtil', verwendet jedoch nur aktive Kanten (Kanten aus 'self.E_active')
+    def topologicalSortUtilActive(self, v, visited, stack):
+        # Mark the current node as visited.
+        visited[self.V.index(v)] = True
+
+        # Recur for all the vertices adjacent to this vertex
+        outneighbors = self.G[v]
+        for w in outneighbors:
+            if self.E_active[-1][self.E.index((v,w))] and not visited[self.V.index(w)]:
+                self.topologicalSortUtilActive(w, visited, stack)
+
+        # Push current vertex to stack which stores result
+        stack.append(v)
+
+    # The function to do Topological Sort. It uses recursive topologicalSortUtil()
+    # Analog zu 'topologicalSort', verwendet jedoch nur aktive Kanten (Kanten aus 'self.E_active')
+    def topologicalSortActive(self):
+        # Mark all the vertices as not visited
+        visited = [False]*self.n
+        visited[self.V.index('t1')] = True
+        stack = ['t1']
+
+        # Call the recursive helper function to store Topological
+        # Sort starting from all vertices one by one
+        for i in range(self.n):
+            if not visited[i]:
+                self.topologicalSortUtilActive(self.V[i], visited, stack)
         return stack
 
     # Quelle: http://www.gilles-bertrand.com/2014/03/dijkstra-algorithm-python-example-source-code-shortest-path.html
@@ -221,7 +221,7 @@ class ContApp:
         :param b: Flussmenge im Knoten 'v'
         :param outneighbors: Liste aller Knoten, die über eine direkte aktive Kante von 'v' aus erreichbar sind
         :param w_slope: Liste über Änderung der Labels aller Knoten in 'outneighbors'
-        :return: Flussaufteilung 'z' auf alle von 'v' ausgehenden aktiven Kanten
+        :return: Flussaufteilung 'z' auf alle von 'v' ausgehenden aktiven Kanten in Form einer Liste
         """
         pk = len(outneighbors)
         if pk == 0:
@@ -408,11 +408,18 @@ class ContApp:
         return 0
 
     def main(self):
+        """
+        Hauppteil: Konstuiert schrittweise einen kontinuierlichen IDE-Fluss zu den Eingabedaten aus 'Math.cont_data'. Erzeugt Tabelle der
+        Klasse 'Graphics.OutputTable' mit den entsprechenden Daten des Flusses.
+        :return: 0
+        """
         theta = 0
-        T = 100
+        # Obergrenze für theta
+        T = 10000
         # Aufteilung des Flusses
         x_total = np.zeros(self.m)
         stop_outflow = []
+        top_ord = self.topologicalSort()
         while theta < T:
             # in der Zukunft liegende Zeitpunkte aus der Liste 'self.u_start'
             start_points = [t for t in self.u_start if t > theta]
@@ -420,7 +427,6 @@ class ContApp:
             # während der Laufzeit aktualisiert)
             stop_outflow = [t for t in stop_outflow if t > theta]
             top_ord_act = self.topologicalSortActive()
-            top_ord = self.topologicalSort()
             theta_ind = self.global_phase.index(theta)
             # Liste aller Kanten, deren Warteschlange in der aktuellen Phase 0 wird, und deren f^- -Werte auf 0
             # gesetzt werden müssen
@@ -438,6 +444,7 @@ class ContApp:
                 w_slope = [self.del_plus_label[self.V.index(node)] for node in active_neighbors]
                 x = self.waterfilling_algo(v, self.calc_b(v, theta), active_neighbors, w_slope)
                 firstedge = True
+                # betrachte aktive Kanten
                 for e_ind in active_paths:
                     e = self.E[e_ind]
                     x_total[e_ind] = x[active_paths.index(e_ind)]
@@ -472,15 +479,15 @@ class ContApp:
                     change_of_c = self.change_of_cost(e_ind, theta, x[active_paths.index(e_ind)])
                     change_of_q = change_of_c * self.nu[e_ind]
                     new_del_plus = change_of_c + self.del_plus_label[self.V.index(e[1])]
-                    if firstedge or new_del_plus < self.del_plus_label[self.V.index(e[0])]:
-                        self.del_plus_label[self.V.index(e[0])] = new_del_plus
+                    # prüfe, ob Änderung des Labels von Knoten 'v' angepasst werden muss
+                    if firstedge or new_del_plus < self.del_plus_label[self.V.index(v)]:
+                        self.del_plus_label[self.V.index(v)] = new_del_plus
                         firstedge = False
                     # Falls die Warteschlange von 'e' unter aktuellem Fluss abgebaut wird, bestimme Zeitpunkt, zu
                     # dem diese vollständig abgebaut ist (bei gleich bleibendem Fluss)
                     if change_of_q < -self.eps:
                         # 'phase_length': Dauer bis Warteschlangenlänge gleich 0
                         phase_length = - self.q_global[theta_ind][e_ind] / change_of_q
-                        # phase_length < next_phase
                         if phase_length < next_phase - self.eps:
                             next_phase = phase_length
                             # prüfe ob Zufluss 0 und somit 'fm' auf 0 gesetzt werden muss
@@ -490,6 +497,11 @@ class ContApp:
                         elif max([abs(phase_length - next_phase), change_of_q + self.nu[e_ind]]) < self.eps:
                             fm_to_zero.append(e_ind)
 
+            # erneuter Durchlauf der vorherigen Schleife, diesmal werden die inaktiven Kanten betrachtet. Diese Aufteilung ist notwendig,
+            # damit die Änderungen der Knotenlabels erst richtig gesetzt (siehe Schleife zuvor), und dann für weitere Rechnungen
+            # (siehe nachstehende Schleife) verwendet werden.
+            for v in top_ord:
+                active_paths = self.get_outgoing_active_edges(v)
                 delta_p = self.get_outgoing_edges(v)
                 inactive_paths = [e for e in delta_p if e not in active_paths]
                 for e_ind in inactive_paths:
@@ -498,6 +510,15 @@ class ContApp:
                     if abs(self.fp[e_ind][-1][1]) > self.eps:
                         self.fp[e_ind].append((theta, 0))
                         self.fp_ind[e_ind].append(theta_ind)
+
+                    if self.q_global[theta_ind][e_ind] > self.eps:
+                        outflow = self.nu[e_ind]
+                    else:
+                        outflow = 0
+                    fm_ind = self.last_fm_change(e_ind, theta + self.r[e_ind])
+                    # falls sich f^- -Wert durch die Flussaufteilung in dieser Phase ändert, aktualisiere 'self.fm'
+                    if abs(self.fm[e_ind][fm_ind][1] - outflow) > self.eps:
+                        self.fm[e_ind].append((theta + self.r[e_ind], outflow))
 
                     # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
                     last_fm_ind = self.last_fm_change(e_ind, theta)
@@ -523,9 +544,15 @@ class ContApp:
                         elif max([abs(phase_length - next_phase), change_of_q + self.nu[e_ind]]) < self.eps:
                             fm_to_zero.append(e_ind)
 
-                if len(active_paths) > 0:
-                    active_ind = active_paths[0]  # aktive Kante
-                    active_change = self.change_of_cost(active_ind, theta, x[0])  # Änderung der Kosten dieser Kante
+                len_act = len(active_paths)
+                if len_act > 0:
+                    for i in range(len_act):
+                        active_ind = active_paths[i]
+                        if x_total[active_ind] > 0 or i == len_act - 1:
+                            # active_ind = active_paths[i]  # aktive Kante, die während der gesamten Phase aktiv bleibt
+                            active_change = self.change_of_cost(active_ind, theta, x_total[active_ind])  # Änderung der Kosten dieser Kante
+                            break
+
                     for e_ind in inactive_paths:
                         change = self.change_of_cost(e_ind, theta, 0)
                         # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
@@ -596,7 +623,7 @@ class ContApp:
                 self.fp_ind[e].append(theta_ind)
 
         # erzeuge Ausgabe
-        OutputTable(self.V, self.E, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase,
-                    self.c, self.labels, self.flow_vol)
+        OutputTable(self.V, self.E, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase, self.c, self.labels,
+                    self.flow_vol)
         return 0
 
