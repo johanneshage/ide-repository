@@ -9,6 +9,7 @@ class OutputTable(object):
 
         self.V = V  # Knotenmenge
         self.E = E  # Kantenmenge
+        self.n = len(V)  # Anzahln Knoten
         self.m = len(E)  # Anzahl Kanten
         self.q = q  # Warteschlangenlängen aller Kanten für jede Phase
         self.phases = phases  # Zeitpunkte der Phasenänderungen
@@ -25,6 +26,7 @@ class OutputTable(object):
         self.table.title("Zeit: 0")
         self.filemenuR = tk.Menu(self.menu)  # Menüpunkt Zeilen
         self.filemenuC = tk.Menu(self.menu)  # Menüpunkt Spalten
+        self.menuStartingNodes = tk.Menu(self.filemenuR)  # Untermenü von 'self.filemenuR
         self.menu.add_cascade(label="Zeilen", menu=self.filemenuR)
         self.menu.add_cascade(label="Spalten", menu=self.filemenuC)
 
@@ -44,6 +46,21 @@ class OutputTable(object):
                                        variable=self.CheckVarPosFlow, command=self.check_pos_flow)
         self.filemenuR.add_checkbutton(label="Kanten mit positiver Warteschlangenlänge",variable=self.CheckVarPosQ,
                                        command=self.check_pos_q)
+
+        self.filemenuR.add_cascade(label="Kanten mit Startknoten ...", menu=self.menuStartingNodes)
+        self.CheckVarsV = []
+
+        def get_bool(f):
+            return f.get()
+
+        for i in range(len(self.V)):
+            newCheckVar = tk.BooleanVar()
+            self.CheckVarsV.append(newCheckVar)
+            self.CheckVarsV[-1].set(True)
+            self.menuStartingNodes.add_checkbutton(label="{}".format(self.V[i]), variable=self.CheckVarsV[-1],
+                                                   command=functools.partial(self.check_v, i,
+                                                                             functools.partial(get_bool, self.CheckVarPosFlow),
+                                                                             functools.partial(get_bool, self.CheckVarPosQ)))
 
         # Variablen der Checkboxen zu den einzelnen Spalten
         self.CheckVarFp = tk.BooleanVar()  # wenn 'True', zeige Spalte 'f^+'
@@ -74,7 +91,7 @@ class OutputTable(object):
             label="c zu Beginn", variable=self.CheckVarC, command=functools.partial(self.check_column, 5))
         self.filemenuC.add_checkbutton( label="label des Endknotens zu Beginn", variable=self.CheckVarLabel,
             command=functools.partial(self.check_column, 6))
-        self.eps = 10**(-4)
+        self.eps = 10**(-8)
         self.col_heads = ["f^+", "f^-", "q zu Beginn", "Änderung q / nu", "c zu Beginn",
                           "label des Endknotens \n zu Beginn"]
         self.cols = len(self.col_heads)
@@ -147,7 +164,7 @@ class OutputTable(object):
         :param z: Einflussrate in Kante
         :return: Änderungsrate der Kosten
         """
-        if self.q[phase_ind][e_ind] > 0:
+        if self.q[phase_ind][e_ind] > self.eps:
             return (z - self.nu[e_ind])/self.nu[e_ind]
         return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0])
 
@@ -162,6 +179,8 @@ class OutputTable(object):
         if self.CheckVarAll.get():
             self.CheckVarPosFlow.set(True)
             self.CheckVarPosQ.set(True)
+            for i in range(len(self.CheckVarsV)):
+                self.CheckVarsV[i].set(True)
             for ro in self.hidden_rows:
                 for co in non_hidden_cols:
                     self.grid_entries[ro + 2][co].grid()
@@ -171,16 +190,72 @@ class OutputTable(object):
             for ro in range(2, self.m + 2):
                 for co in non_hidden_cols:
                     self.grid_entries[ro][co].grid_remove()
-            # Im Fall das genau eine der Variablen 'self.CheckVarPosFlow' und 'self.CheckVarPosQ' 'False' ist, muss
-            # die entsprechende Funktion 'self.check_pos_flow', bzw. 'self.check_pos_q' zuerst aufgerufen werden,
-            # um Korrektheit zu garantieren (sonst können Zeilen die eigentlich angezeigt werden sollen versteckt
-            # werden).
+            # Im Fall das genau eine der Variablen 'self.CheckVarPosFlow' und 'self.CheckVarPosQ' 'False' ist, muss die entsprechende
+            # Funktion 'self.check_pos_flow', bzw. 'self.check_pos_q' zuerst aufgerufen werden, um Korrektheit zu garantieren (sonst
+            # können Zeilen die eigentlich angezeigt werden sollen versteckt werden).
+            bool_q = self.CheckVarPosQ.get()
             if self.CheckVarPosFlow.get():
                 self.check_pos_q()
                 self.check_pos_flow()
+                if bool_q:
+                    for i in range(self.n):
+                        self.check_v(i, check_vol=True, check_q=True)
+                else:
+                    for i in range(self.n):
+                        self.check_v(i, check_vol=True, check_q=False)
             else:
                 self.check_pos_flow()
                 self.check_pos_q()
+                if bool_q:
+                    for i in range(self.n):
+                        self.check_v(i, check_vol=False, check_q=True)
+                else:
+                    for i in range(self.n):
+                        self.check_v(i, check_vol=False, check_q=False)
+        return
+
+    def check_v(self, v_ind, check_vol, check_q):
+        """
+        Aufruf bei Änderung des Status der Checkbox zum Knoten mit Index 'v_ind'. Ist die zur Checkbox gehörende Variable
+        'self.CheckVarsV[v_ind]' "True", so werden im Menü alle Kanten mit diesem Startknoten in der Tabelle angezeigt. Umgekehrt werden
+        diese Kanten aus der Tabelle entfernt, falls die Checkbox auf "False" gesetzt ist.
+        :param v_ind: Index des betrachteten Knotens
+        :param check_vol: Momentaner Wahrheitswert der Checkbox 'self.CheckVarPosFlow' oder Funktion, die diesen Wahrheitswert bestimmt
+        :param check_q: Momentaner Wahrheitswert der Checkbox 'self.CheckVarPosQ' oder Funktion, die diesen Wahrheitswert bestimmt
+        :return: Kein Rückgabewert
+        """
+        if self.CheckVarAll.get():
+            return
+        # 'check_vol', 'check_q' sind hier entweder der Wahrheitswert der entsprechenden Checkbox, oder eine Funktion der Form
+        # 'functools.partial', durch deren Aufruf diese Wahrheitswerte bestimmt werden.
+        if callable(check_vol):
+            check_vol = check_vol()
+            check_q = check_q()
+        v = self.V[v_ind]
+        delta_plus = [self.E.index(e) for e in self.E if e[0] == v]
+        non_hidden_cols = list(set(range(self.cols + 1)) - set(self.hidden_cols))
+        if self.CheckVarsV[v_ind].get():
+            # leer, falls 'self.CheckVarsV[v_ind]' vorher bereits "True"
+            newly_visible = list(set(self.hidden_rows).intersection(set(delta_plus)))
+            for ro in newly_visible:
+                self.hidden_rows.remove(ro)
+                for co in non_hidden_cols:
+                    self.grid_entries[ro + 2][co].grid()
+        elif not (check_vol and self.flow_vol[self.phase_ind][v_ind] > self.eps):
+            if check_q:
+                # entferne alle Kanten in 'delta_plus' mit Warteschlangenlänge 0
+                for e_ind in delta_plus:
+                    if self.q[self.phase_ind][e_ind] < self.eps:
+                        self.hidden_rows.append(e_ind)
+                        for co in non_hidden_cols:
+                            self.grid_entries[e_ind + 2][co].grid_remove()
+            else:
+                # entferne alle Kanten in 'delta_plus'
+                for ro in delta_plus:
+                    if ro not in self.hidden_rows:
+                        self.hidden_rows.append(ro)
+                        for co in non_hidden_cols:
+                            self.grid_entries[ro + 2][co].grid_remove()
         return
 
     def check_pos_flow(self):
@@ -199,28 +274,26 @@ class OutputTable(object):
             for ro in init_rows:
                 v = self.E[ro][0]
                 v_ind = self.V.index(v)
-                if self.flow_vol[self.phase_ind][v_ind] > 0:
+                if self.flow_vol[self.phase_ind][v_ind] > self.eps:
                     self.hidden_rows.remove(ro)
                     for co in non_hidden_cols:
                         self.grid_entries[ro + 2][co].grid()
         elif self.CheckVarPosQ.get():
+            # Liste aller Startknoten von Kanten, welche momentan angezeigt werden (ohne Wiederholungen)
             non_hidden_rows = list(set(range(self.m)) - set(self.hidden_rows))
-            for ro in non_hidden_rows:
-                v = self.E[ro][0]
+            non_hidden_start_nodes = list(set([self.E[e_ind][0] for e_ind in non_hidden_rows]))
+            for v in non_hidden_start_nodes:
                 v_ind = self.V.index(v)
-                if self.flow_vol[self.phase_ind][v_ind] > 0 and self.q[self.phase_ind][ro] < self.eps:
-                    self.hidden_rows.append(ro)
-                    for co in non_hidden_cols:
-                        self.grid_entries[ro + 2][co].grid_remove()
+                if self.flow_vol[self.phase_ind][v_ind] > self.eps:
+                    self.check_v(v_ind, check_vol=False, check_q=True)
         else:
+            # Liste aller Startknoten von Kanten, welche momentan angezeigt werden (ohne Wiederholungen)
             non_hidden_rows = list(set(range(self.m)) - set(self.hidden_rows))
-            for ro in non_hidden_rows:
-                v = self.E[ro][0]
+            non_hidden_start_nodes = list(set([self.E[e_ind][0] for e_ind in non_hidden_rows]))
+            for v in non_hidden_start_nodes:
                 v_ind = self.V.index(v)
-                if self.flow_vol[self.phase_ind][v_ind] > 0:
-                    self.hidden_rows.append(ro)
-                    for co in non_hidden_cols:
-                        self.grid_entries[ro + 2][co].grid_remove()
+                if self.flow_vol[self.phase_ind][v_ind] > self.eps:
+                    self.check_v(v_ind, check_vol=False, check_q=False)
         return
 
     def check_pos_q(self):
@@ -237,25 +310,21 @@ class OutputTable(object):
         if self.CheckVarPosQ.get():
             init_rows = self.hidden_rows.copy()
             for ro in init_rows:
-                if self.q[self.phase_ind][ro] > 0:
+                if self.q[self.phase_ind][ro] > self.eps:
                     self.hidden_rows.remove(ro)
                     for co in non_hidden_cols:
                         self.grid_entries[ro + 2][co].grid()
-        elif self.CheckVarPosFlow.get():
-            non_hidden_rows = list(set(range(self.m)) - set(self.hidden_rows))
-            for ro in non_hidden_rows:
-                v_ind = self.V.index(self.E[ro][0])
-                if self.q[self.phase_ind][ro] > 0 and self.flow_vol[self.phase_ind][v_ind] < self.eps:
-                    self.hidden_rows.append(ro)
-                    for co in non_hidden_cols:
-                        self.grid_entries[ro + 2][co].grid_remove()
         else:
             non_hidden_rows = list(set(range(self.m)) - set(self.hidden_rows))
-            for ro in non_hidden_rows:
-                if self.q[self.phase_ind][ro] > 0:
-                    self.hidden_rows.append(ro)
-                    for co in non_hidden_cols:
-                        self.grid_entries[ro + 2][co].grid_remove()
+            # Liste aller Startknoten von Kanten, welche momentan angezeigt werden und positive Warteschlangenlänge haben (ohne
+            # Wiederholungen)
+            start_nodes_pos_q = list(set([self.E[e_ind][0] for e_ind in non_hidden_rows if self.q[self.phase_ind][e_ind] > self.eps]))
+            if self.CheckVarPosFlow.get():
+                for v in start_nodes_pos_q:
+                    self.check_v(self.V.index(v), check_vol=True, check_q=False)
+            else:
+                for v in start_nodes_pos_q:
+                    self.check_v(self.V.index(v), check_vol=False, check_q=False)
         return
 
     def check_column(self, col_ind):
