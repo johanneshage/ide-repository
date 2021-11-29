@@ -5,11 +5,16 @@ import functools
 
 class OutputTable(object):
 
+    """
+    Zeigt Ausgabefenster zur Darstellung eines kontinuierlichen IDE-Flusses innerhalb eines single-sink Netzwerks, für die gegebenen
+    Parameter.
+    """
+
     def __init__(self, V, E, nu, fp, fp_ind, fm, q, phases, c, labels, vol):
 
         self.V = V  # Knotenmenge
         self.E = E  # Kantenmenge
-        self.n = len(V)  # Anzahln Knoten
+        self.n = len(V)  # Anzahl Knoten
         self.m = len(E)  # Anzahl Kanten
         self.q = q  # Warteschlangenlängen aller Kanten für jede Phase
         self.phases = phases  # Zeitpunkte der Phasenänderungen
@@ -34,8 +39,7 @@ class OutputTable(object):
         self.CheckVarAll = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen
         self.CheckVarPosFlow = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positivem Flussvolumen im
                                                 # Startknoten der entsprechenden Kante
-        self.CheckVarPosQ = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positiver Warteschlangen-
-                                             # länge
+        self.CheckVarPosQ = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positiver Warteschlangenlänge
         self.CheckVarAll.set(True)
         self.CheckVarPosFlow.set(True)
         self.CheckVarPosQ.set(True)
@@ -126,12 +130,16 @@ class OutputTable(object):
         # Beschriftung der Zeilen 3 - 'self.m'+2 für alle Spalten
         for ro in range(self.m):
             grid_ro = ro + 2
-            self.grid_entries[grid_ro][0] = tk.Text(self.table, width=22, height=1)
+            if self.V.index(self.E[ro][0]) % 2 == 0:
+                bg_color = 'lightgrey'
+            else:
+                bg_color = 'white'
+            self.grid_entries[grid_ro][0] = tk.Text(self.table, width=22, height=1, bg=bg_color)
             self.grid_entries[grid_ro][0].insert('end', "({}, {})".format(self.E[ro][0], self.E[ro][1]))
             self.grid_entries[grid_ro][0].config(state='disabled')
             self.grid_entries[grid_ro][0].grid(row=grid_ro, column=0)
             for co in range(1, self.cols + 1):
-                self.grid_entries[grid_ro][co] = tk.Text(self.table, width=22, height=1)
+                self.grid_entries[grid_ro][co] = tk.Text(self.table, width=22, height=1, bg=bg_color)
 
             self.grid_entries[grid_ro][1].insert('end', self.fp[ro][0][1])
             self.grid_entries[grid_ro][2].insert('end', 0)
@@ -190,7 +198,7 @@ class OutputTable(object):
             for ro in range(2, self.m + 2):
                 for co in non_hidden_cols:
                     self.grid_entries[ro][co].grid_remove()
-            # Im Fall das genau eine der Variablen 'self.CheckVarPosFlow' und 'self.CheckVarPosQ' 'False' ist, muss die entsprechende
+            # Im Fall dass genau eine der Variablen 'self.CheckVarPosFlow' und 'self.CheckVarPosQ' 'False' ist, muss die entsprechende
             # Funktion 'self.check_pos_flow', bzw. 'self.check_pos_q' zuerst aufgerufen werden, um Korrektheit zu garantieren (sonst
             # können Zeilen die eigentlich angezeigt werden sollen versteckt werden).
             bool_q = self.CheckVarPosQ.get()

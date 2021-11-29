@@ -10,7 +10,14 @@ class ContApp:
     def __init__(self, G, u):
         """
 
-        :param G:
+        :param G: Gerichteter Graph als Dictionary nach folgendem Beispiel:
+                    G = {
+                            's1': {'v': (2,1), 'w': (2, 1.5)},
+                            'v': {'t1': (2, 4.2)},
+                            'w': {'t1': (1, 1)},
+                            't1': {}
+                        }
+                Die 2-Tupel der Form (<Kapazität>,<Reisedauer>) geben dabei die Werte der Kanten an.
         :param u: Liste, welche für jeden Knoten aus 'G' eine leere Liste (-> kein externer Einfluss in diesen Knoten)
                   oder eine Liste von 2-Tupeln der folgenden Form enthält:
                   (a_i,x_i): beschreibt den Einfluss von x_i Flusseinheiten innerhalb des Zeitintervalls [a_i,a_{i+1})
@@ -588,13 +595,13 @@ class ContApp:
                 # speichere aktuelle Warteschlangenlängen
                 self.q_global.append(new_q_global)
 
-            print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, ":")
+            '''print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, ":")
             for v_ind in range(self.n):
                 out_neighbors = self.get_outgoing_edges(top_ord_act[v_ind])
                 for e_ind in out_neighbors:
                     if x_total[e_ind] > 0:
                         print(self.E[e_ind], x_total[e_ind])
-
+'''
             theta += next_phase
             if next_phase != T:
                 # speichere Phase
