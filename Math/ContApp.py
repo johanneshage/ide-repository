@@ -7,7 +7,7 @@ class ContApp:
     IDE - Konstruktion für allgemeine single-sink Netzwerke
     """
 
-    def __init__(self, G, u):
+    def __init__(self, G, u, table_output):
         """
 
         :param G: Gerichteter Graph als Dictionary nach folgendem Beispiel:
@@ -24,6 +24,10 @@ class ContApp:
                   in den entsprechenden Knoten. Beachte: nach Voraussetzung sind alle Einflüsse endlich, d.h. für jeden
                   dieser Knoten ist der letzte Eintrag in dieser Liste ein Tupel der Form (t, 0) für einen Zeitpunkt
                   t < infty.
+        :param table_output: Boolsche Variable, die festlegt, in welcher Form der Output erfolgt. Hat diese den Wert
+                             'True', so wird eine "OutputTable" erzeugt, andernfalls werden die bloßen Daten
+                             Terminationszeitpunkt, (Kanten- )Einflussraten, (Kanten- )Ausflussraten, Warteschlangen-
+                             längen und Knotenlabels als Float, bzw. Listen ausgegeben.
         """
         self.E = []  # Kanten
         self.nu = []  # Kapazitaeten
@@ -38,6 +42,7 @@ class ContApp:
         self.keys = G.keys()
         self.eps = 10**(-8)  # Für Rundungsfehler
         self.flow_vol = []  # merke Flusswerte in den einzelnen Knoten für OutputTable
+        self.table_output = table_output
 
         for delta in self.items:
             for w in list(delta[1].keys()):
@@ -84,7 +89,7 @@ class ContApp:
                     self.E_active[0][edge] = 1
 
         self.del_plus_label = np.zeros(self.n)
-        self.main()
+        self.output = self.main()
 
     # Quelle:
     # https://www.geeksforgeeks.org/topological-sorting/#:~:text=Topological%20sorting%20for%20Directed%20Acyclic,4%202%203%201%200%E2%80%9D
@@ -595,13 +600,13 @@ class ContApp:
                 # speichere aktuelle Warteschlangenlängen
                 self.q_global.append(new_q_global)
 
-            '''print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, ":")
+            """print("Kanten mit positivem Einfluss zum Zeitpunkt", theta, ":")
             for v_ind in range(self.n):
                 out_neighbors = self.get_outgoing_edges(top_ord_act[v_ind])
                 for e_ind in out_neighbors:
                     if x_total[e_ind] > 0:
                         print(self.E[e_ind], x_total[e_ind])
-'''
+            """
             theta += next_phase
             if next_phase != T:
                 # speichere Phase
@@ -629,8 +634,12 @@ class ContApp:
                 self.fp[e].append((theta - next_phase, 0))
                 self.fp_ind[e].append(theta_ind)
 
-        # erzeuge Ausgabe
-        OutputTable(self.V, self.E, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase, self.c, self.labels,
-                    self.flow_vol)
+        if self.table_output:
+            # erzeuge Ausgabe
+            OutputTable(self.V, self.E, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase,
+                        self.c, self.labels, self.flow_vol)
+        else:
+            # keine graphische Ausgabe, stattdessen Rückgabe notwendiger Daten
+            return [theta - next_phase, self.fp, self.fm, self.E, self.q_global, self.global_phase, self.labels, self.V]
         return 0
 
