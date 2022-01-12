@@ -10,7 +10,7 @@ class OutputTable(object):
     Parameter.
     """
 
-    def __init__(self, V, E, nu, fp, fp_ind, fm, q, phases, c, labels, vol):
+    def __init__(self, V, E, nu, fp, fp_ind, fm, q, phases, c, labels, vol, zero_edges):
 
         self.V = V  # Knotenmenge
         self.E = E  # Kantenmenge
@@ -34,6 +34,7 @@ class OutputTable(object):
         self.menuStartingNodes = tk.Menu(self.filemenuR)  # Untermenü von 'self.filemenuR
         self.menu.add_cascade(label="Zeilen", menu=self.filemenuR)
         self.menu.add_cascade(label="Spalten", menu=self.filemenuC)
+        self.zero_edges = zero_edges
 
         # Variablen der Checkboxen zu den Zeilengruppen
         self.CheckVarAll = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen
@@ -172,6 +173,8 @@ class OutputTable(object):
         :param z: Einflussrate in Kante
         :return: Änderungsrate der Kosten
         """
+        if e_ind in self.zero_edges:
+            return 0
         if self.q[phase_ind][e_ind] > self.eps:
             return (z - self.nu[e_ind])/self.nu[e_ind]
         return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0])
@@ -417,6 +420,7 @@ class OutputTable(object):
 
             for co in range(1, self.cols + 1):
                 self.grid_entries[grid_ro][co].config(state='disable')
+
             self.check_all_rows()
         return
 
