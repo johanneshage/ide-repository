@@ -17,8 +17,7 @@ class ContMain:
     def import_gexf_graph():
         """
         Funktion zum Einlesen eines Graphen aus einer .gexf Datei
-        :return: graph: gerichteter Graph als Dictionary,
-                 posit: Knotenpositionen als passende Koordinaten
+        :return: graph: gerichteter Graph als Dictionary
         """
 
         # Funktion aus 'shutil', erzeugt Kopie von 'myGraph.gexf')

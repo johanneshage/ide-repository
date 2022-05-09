@@ -131,7 +131,10 @@ class OutputTableMulti(object):
                     self.frame_entries[ro][ind][i].grid(row=i, column=0)
 
             self.grid_entries[grid_ro][4].insert('end', 0)
-            self.grid_entries[grid_ro][5].insert('end', self.change_of_cost(ro, 0, self.fp[i][ro][0][1]))
+            total_inflow = 0
+            for i in range(self.I):
+                total_inflow += self.fp[i][ro][0][1]
+            self.grid_entries[grid_ro][5].insert('end', self.change_of_cost(ro, 0, total_inflow))
             self.grid_entries[grid_ro][6].insert('end', self.c[0][ro])
 
             for i in range(self.I):
@@ -392,8 +395,6 @@ class OutputTableMulti(object):
 
             fp_frame = self.frame_entries[ro][self.multi_cols.index(2)]
             q_delta = self.grid_entries[grid_ro][5]
-            q_delta.config(state='normal')
-            q_delta.delete(1.0, tk.END)
             fp_sum = 0
             fp_changed = False
             for i in range(self.I):
@@ -409,15 +410,20 @@ class OutputTableMulti(object):
 
                 fm_times = [t for (t, v) in self.fm[i][ro]]
                 if theta in fm_times:
-                    fm_entry = self.grid_entries[grid_ro][3][i]
+                    fm_entry = self.frame_entries[ro][self.multi_cols.index(3)][i]
+                    # fm_entry = self.grid_entries[grid_ro][3][i]
                     fm_entry.config(state='normal')
                     fm_entry.delete(1.0, tk.END)
                     fm_entry.insert('end', self.fm[i][ro][fm_times.index(theta)][1])
 
             if fp_changed:
                 change = self.change_of_cost(ro, self.phase_ind, fp_sum)
+                q_delta.config(state='normal')
+                q_delta.delete(1.0, tk.END)
                 q_delta.insert('end', change)
             elif abs(self.q[self.phase_ind][ro]) < self.eps:
+                q_delta.config(state='normal')
+                q_delta.delete(1.0, tk.END)
                 q_delta.insert('end', 0)
 
             self.grid_entries[grid_ro][4].insert('end', self.q[self.phase_ind][ro])
@@ -479,12 +485,14 @@ class OutputTableMulti(object):
 
                 fm_times = [t for (t, v) in self.fm[i][ro]]
                 if theta in fm_times:
-                    fm_entry = self.grid_entries[grid_ro][3][i]
+                    fm_entry = self.frame_entries[ro][self.multi_cols.index(3)][i]
+                    # fm_entry = self.grid_entries[grid_ro][3][i]
                     fm_entry.config(state='normal')
                     fm_entry.delete(1.0, tk.END)
                     fm_entry.insert('end', self.fm[i][ro][fm_times.index(theta)][1])
                 elif old_theta in fm_times:
-                    fm_entry = self.grid_entries[grid_ro][3][i]
+                    fm_entry = self.frame_entries[ro][self.multi_cols.index(3)][i]
+                    # fm_entry = self.grid_entries[grid_ro][3][i]
                     fm_entry.config(state='normal')
                     fm_entry.delete(1.0, tk.END)
                     fm_entry.insert('end', self.fm[i][ro][fm_times.index(old_theta) - 1][1])
@@ -500,7 +508,8 @@ class OutputTableMulti(object):
 
             self.grid_entries[grid_ro][4].insert('end', self.q[self.phase_ind][ro])
             self.grid_entries[grid_ro][6].insert('end', self.c[self.phase_ind][ro])
-            frame = self.grid_entries[grid_ro][7]
+            frame = self.frame_entries[ro][self.multi_cols.index(7)][i]
+            # frame = self.grid_entries[grid_ro][7]
             for i in range(self.I):
                 frame.insert('end', self.labels[i][self.phase_ind][self.V.index(self.E[ro][1])])
 

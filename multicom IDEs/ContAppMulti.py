@@ -2,6 +2,9 @@ import numpy as np
 from OutputTableMulti import OutputTableMulti
 from scipy.sparse.linalg import spsolve
 from scipy.optimize import linprog
+import scipy
+from operator import itemgetter
+from random import random
 
 
 class ContAppMulti:
@@ -27,12 +30,12 @@ class ContAppMulti:
         self.G = G
         self.u = u
         self.I = len(self.u)
-        self.labels = self.I*[[]]  # Knotenlabels
+        self.labels = []  # Knotenlabels
         self.V = list(G.keys())  # Liste der Knoten
         self.n = len(self.V)  # Anzahl Knoten
         self.items = G.items()
         self.keys = G.keys()
-        self.eps = 10**(-8)  # Für Rundungsfehler
+        self.eps = 10**(-9)  # Für Rundungsfehler
         self.b = np.zeros((self.I, self.n))  # merke Flusswerte je Gut für jeden Knoten
         self.flow_vol = []  # merke Flusswerte in den einzelnen Knoten für OutputTable
 
@@ -47,18 +50,18 @@ class ContAppMulti:
         self.q_global = [self.m * [0]]  # speichere für jede globale Phase alle momentanen Warteschlangenlängen zu
         # Beginn der Phase
 
-        self.fp = self.I * [[]]  # f^+    [[],[]]
-        self.fp_ind = self.I * [[]]  # Liste der Indizes der Phasen
-        self.fm = self.I * [[]]  # f^-
+        self.fp = [[] for _ in range(self.I)]  # f^+    [[],[]]
+        self.fp_ind = [[] for _ in range(self.I)]  # Liste der Indizes der Phasen
+        self.fm = [[] for _ in range(self.I)]  # f^-
         for i in range(self.I):
             for k in range(self.m):
                 self.fp[i].append([(0, 0)])
                 self.fp_ind[i].append([])
                 self.fm[i].append([(0, 0)])
 
-            self.c.append(np.zeros(self.m))
-            for e in self.E:  # Initialisierung "self.c" (Kosten)
-                self.c[0][self.E.index(e)] = self.r[self.E.index(e)]
+        self.c.append(np.zeros(self.m))
+        for e in self.E:  # Initialisierung "self.c" (Kosten)
+            self.c[0][self.E.index(e)] = self.r[self.E.index(e)]
 
         # Zeitpunkte, zu denen sich der Zufluss in mindestens einem Quellknoten ändert
         self.u_start = set()
@@ -71,9 +74,11 @@ class ContAppMulti:
 
         self.E_active = self.I * [[np.ones(self.m)]]
         for i in range(self.I):
-            self.labels[i].append(self.dijkstra(self.graphReversed, "t{}".format(i+1), 0,visited=[], distances={}))
+            self.labels.append([self.dijkstra(self.graphReversed, "t{}".format(i+1), 0,visited=[], distances={})])
 
-        self.E_active = self.I * [[np.zeros(self.m)]]
+        self.E_active = []
+        for i in range(self.I):
+            self.E_active.append([np.zeros(self.m)])
         for v in self.V:
             v_ind = self.V.index(v)
             outneighbors = self.G[v].keys()
@@ -300,6 +305,8 @@ class ContAppMulti:
         """
         b = 0
         v_ind = self.V.index(v)
+        if v_ind == self.V.index('t{}'.format(i+1)):
+            return 0
         in_paths = self.get_ingoing_edges(v)
         for e_ind in in_paths:
             ind = self.last_fm_change(i, e_ind, phase)
@@ -412,14 +419,25 @@ class ContAppMulti:
 
     def bary_coords(self, v, x):
         n = len(x)
-        ones = np.ones(n)
-        ones = ones.reshape((1, n))
-        v = np.concatenate((v, ones))
-        x = np.append(x, 1)
+        if n == 1:
+            return [1]
         q, r = np.linalg.qr(v)
         z = q.T.dot(x)
-        b = np.linalg.solve(r, z)
+        b = np.zeros(n)
+        b[n - 1] = z[n - 1] / r[n - 1, n - 1]
+        if b[n - 1] < self.eps:
+            b[n - 1] = 0
+        for ind in range(n - 2, -1, -1):
+            brsum = 0
+            for j in range(n - 1, ind, -1):
+                brsum += b[j] * r[ind, j]
+            b[ind] = (z[ind] - brsum) / r[ind, ind]
+            if b[ind] < self.eps:
+                b[ind] = 0
         # b = np.linalg.solve(v, x)  # anschauen: multigrid verfahren
+        bsum = sum(b)
+        for i in range(n):
+            b[i] *= 1/bsum
         return b
 
     '''def barycentric_trafo_sp(self, simplex, x):
@@ -429,25 +447,70 @@ class ContAppMulti:
         b = spsolve(A,x)'''
 
     def find_ancestor_simplex(self, k, p):
-        # kann Fall xi < 0 auftreten? - Wenn ja -> noch behandeln
-        n = len(p) - 1
+        n = len(p)
         q = k * p
-        x = np.zeros(n+1)
-        lam = np.zeros(n)
+        if n == 1:
+            return q, [1]
+        x = np.zeros(n)
+        lam = np.zeros(n-1)
+        # perturbiere q, damit q nicht am Rand liegt!
+        q_zeros = np.where(q < self.eps)[0]
+        epsilon = 0.5
+        for i in range(n):
+            if q[i] < epsilon and i not in q_zeros:
+                epsilon = q[i]
+        epsilon *= 0.5
+        # so ok ???
+        # epsilon = random() * 0.5
+        v_eps = np.zeros(n)
+        for i in range(0, n, 2):
+            v_eps[i] += epsilon * (10**(-(i % 6) - 1))
+        for i in range(1, n, 2):
+            if i in q_zeros:
+                v_eps[i] += epsilon * (10**(-(i % 6) - 1))
+            else:
+                v_eps[i] -= epsilon * (10**(-(i % 6) - 1))
+        v_sum = sum(v_eps)
+        for i in range(n):
+            # einfacher?
+            if i not in q_zeros:
+                v_eps[i] -= v_sum
+                break
+        q += v_eps
+
         x[0] = np.floor(q[0] + 1)
-        lam[0] = x[0] - q[0]
-        for i in range(1, n):
+        lam[0] = round(x[0] - q[0], 9)
+        for i in range(1, n-1):
             x[i] = np.floor(q[i] - lam[i-1] +1)
-            lam[i] = x[i] - q[i] + lam[i-1]
-        x[n] = q[n] - lam[n-1]
-        pi = range(1, n+1)
-        zipped = sorted(zip(lam, pi), reverse=True)
-        pi = [element for _, element in zipped]
+            lam[i] = round(x[i] - q[i] + lam[i-1], 9)
+        x[n-1] = q[n-1] - lam[n-2]
+
+        '''
+        # if any(x < -self.eps):
+        x[0] = np.ceil(q[0])
+        lam[0] = round(x[0] - q[0], 9)
+        for i in range(1, n-1):
+            x[i] = np.ceil(q[i] - lam[i-1])
+            lam[i] = round(x[i] - q[i] + lam[i-1], 9)
+        x[n-1] = q[n-1] - lam[n-2]'''
+
+        pi = range(1, n)
+        sort = sorted(zip(lam, pi),  key=lambda y: (y[0], -y[1]), reverse=True)
+        pi = [element for _, element in sort]
         return x, pi
 
-    def in_k(self, x, con):
+    def in_k(self, x, con, all_iv, k):
+        xk = k * x
         A, b = con
-        if np.linalg.norm(A.dot(x) - b) < self.eps:  # ?
+        all_iv_keys = all_iv.keys()
+        for (i, v) in all_iv_keys:
+            iv_sum = 0
+            for d in all_iv[(i, v)]:
+                iv_sum += xk[d]
+            if iv_sum > self.eps:
+                for d in all_iv[(i, v)]:
+                    xk[d] *= 1.0 / iv_sum
+        if np.linalg.norm(A.dot(xk) - b) < self.eps and min(xk) > -self.eps:  # ?
             return True
         return False
 
@@ -457,231 +520,398 @@ class ContAppMulti:
         else:
             return max([x - self.nu[e_ind], 0])
 
-    def fk_on_tk(self,x0, pi, con, simplex, theta_ind, c, k):
-
-        [vals, rows, col_pointer] = simplex
-        dim = len(vals)
-        U1 = np.eye(dim+1, k=-1) - np.eye(dim+1)
-        U2 = np.zeros(dim+1)
-        U2[-1] = 1
-        U = np.concatenate((U1, U2.reshape((1,dim+1))))
-        X = np.zeros((dim+1, dim+1))
-        X[:][0] = 1/k * x0
-        f_X = -np.ones((dim+1, dim+1))
-        for j in range(1, dim+1):
-            X[:][j] = X[:][j-1] + U[:][pi[j-1]]
-            g_e = np.zeros(self.m)
-            for e_ind in range(self.m):
-                if col_pointer[e_ind] - col_pointer[e_ind + 1]:
-                    g_e[e_ind] = self.g(e_ind, theta_ind, sum(X[col_pointer[e_ind]:col_pointer[e_ind+1], j]))
-                else:
-                    g_e[e_ind] = self.g(e_ind, theta_ind, 0)
-            if self.in_k(X[:][j], con):
-                # A, b = con
-                # gamma_A = A.copy()
-                # gamma_b = b.copy()
-                # gamma auswerten
-                gamma_zero = np.zeros(dim+1)
-                for i in range(self.I):
-                    act_edges = [e_ind for e_ind in range(self.m) if self.E_active[i][theta_ind][e_ind]]
-                    top_ord = self.topologicalSort(i)[1:]
-                    a = np.zeros((self.I, self.n))
-                    for v in top_ord:
-                        if i == 2:
-                            print("flasc")
-                        delta_p_act = self.get_outgoing_active_edges(i, v)
-                        a[i][v] = np.Inf
-                        for e_ind in delta_p_act:
-                            w = self.V.index(self.E[e_ind][1])
-                            if a[i][v] > g_e[e_ind] + a[i][w]:
-                                a[i][v] = g_e[e_ind] + a[i][w]
-
-                    for e_ind in act_edges:
-                        v, w = self.E[e_ind][:]
-                        v_ind = self.V.index(v)
-                        w_ind = self.V.index(w)
-                        if a[i][v_ind] < g_e[e_ind]/self.nu[e_ind] + a[i][w_ind]:
-                            col_start = col_pointer[e_ind]
-                            col_end = col_pointer[e_ind+1]
-                            col_skip = len([r for r in rows[col_start:col_end] if r < i])
-                            gamma_zero[col_start + col_skip] = 1
-                            # e_i = np.zeros(dim+1)
-                            # e_i[col_start + col_skip] = 1
-                            # np.concatenate((gamma_A, e_i))
-                            # np.concatenate((gamma_b, 0))
-                            f_X[col_start + col_skip][j] = 0
-                e_ind = 0
-                for d in range(dim + 1):
-                    if f_X[d][j] > -self.eps:
-                        continue
-                    try:
-                        while col_pointer[e_ind+1] <= d:
-                            e_ind += 1
-                    except IndexError:
-                        pass
-                    i = rows[d]
-                    v_ind = self.V.index(self.E[e_ind][0])
-                    f_X[d][j] = self.b[i][v_ind]
-                    if i == 2:
-                        print("flasc")
-                    delta_p = self.get_outgoing_active_edges(i, self.V[v_ind]) - [e_ind]
-                    for e in delta_p:
-                        elt_ind = rows[col_pointer[e]:].index(e)
-                        f_X[elt_ind][j] = 0
+    def find_fv(self, node, theta_ind, all_iv, simplex):
+        rows, col_pointer = simplex[1:]
+        dim = len(rows)
+        fv = -np.ones(dim)
+        g_e = np.zeros(self.m)
+        for e_ind in range(self.m):
+            if col_pointer[e_ind] - col_pointer[e_ind + 1]:
+                v_ind = self.V.index(self.E[e_ind][0])
+                xsum = 0
+                for ro in range(col_pointer[e_ind], col_pointer[e_ind+1]):
+                    # Summe effizienter möglich?
+                    if node[ro] > self.eps:
+                        xsum += self.b[rows[ro]][v_ind] * node[ro] / sum([node[d] for d in all_iv[(rows[ro], v_ind)]])
+                g_e[e_ind] = self.g(e_ind, theta_ind, xsum)
             else:
-                f_X[:][j] = c
-        return X, f_X
+                g_e[e_ind] = self.g(e_ind, theta_ind, 0)
+        for i in range(self.I):
+            act_edges = [e_ind for e_ind in range(self.m) if self.E_active[i][theta_ind][e_ind]]
+            top_ord = self.topologicalSort(i)[1:]
+            a = np.zeros(self.n)
+            for v in top_ord:
+                v_ind = self.V.index(v)
+                delta_p_act = self.get_outgoing_active_edges(i, v)
+                a[v_ind] = np.Inf
+                for e_ind in delta_p_act:
+                    w_ind = self.V.index(self.E[e_ind][1])
+                    if a[v_ind] > g_e[e_ind] + a[w_ind]:
+                        a[v_ind] = g_e[e_ind] + a[w_ind]
+                if not a[v_ind] < np.Inf:
+                    a[v_ind] = 0
+
+            for e_ind in act_edges:
+                v, w = self.E[e_ind]
+                v_ind = self.V.index(v)
+                w_ind = self.V.index(w)
+                if self.b[i][v_ind] < self.eps:
+                    continue
+                if g_e[e_ind]/self.nu[e_ind] + a[w_ind] - a[v_ind] > self.eps:
+                    col_start = col_pointer[e_ind]
+                    col_end = col_pointer[e_ind+1]
+                    col_skip = len([r for r in rows[col_start:col_end] if r < i])
+                    fv[col_start + col_skip] = 0
+        co = 0
+        for d in range(dim):
+            if fv[d] > -self.eps:
+                continue
+            try:
+                while col_pointer[co+1] <= d:
+                    co += 1
+            except IndexError:
+                pass
+            if not self.E_active[rows[d]][-1][co]:
+                fv[d] = 0
+                continue
+            v_ind = self.V.index(self.E[co][0])
+            all_iv_keys = all_iv.keys()
+            v_count = len([v for (i, v) in all_iv_keys if i == rows[d]])
+            fv[d] = 1.0 / (self.I * v_count)
+            delta_p = self.get_outgoing_active_edges(rows[d], self.V[v_ind])
+            delta_p.remove(co)
+            for e_ind in delta_p:
+                try:
+                    elt_ind = rows[col_pointer[e_ind]:col_pointer[e_ind + 1]].index(rows[d]) + col_pointer[e_ind]
+                    fv[elt_ind] = 0
+                except ValueError:
+                    continue
+        return fv
+
+    def fk_on_tk(self, x0, pi, con, simplex, all_iv, theta_ind, c, k, part=None):
+
+        dim = len(simplex[0])
+        if dim == 1:
+            return x0, [1]
+        if part is None:
+            part = range(dim)
+        U1 = np.eye(dim-1, k=-1) - np.eye(dim-1)
+        U2 = np.zeros(dim-1)
+        U2[-1] = 1
+        U = np.concatenate((U1, U2.reshape((1,dim-1))))
+        X = np.zeros((dim, dim))
+        X[:, 0] = 1.0 / k * x0
+        # X[:, 0] = x0
+        f_X = -np.ones((dim, dim))
+        for j in part:
+            if j > 0:
+                if len(part) < dim:
+                    X[:, j] = X[:, 0]
+                    for uj in range(j):
+                        X[:, j] += (1.0 / k) * U[:, pi[uj] - 1]
+                else:
+                    X[:, j] = X[:, j-1] + (1.0 / k) * U[:, pi[j-1] - 1]
+            if self.in_k(X[:, j], con, all_iv, k):
+                f_X[:, j] = self.find_fv(X[:, j], theta_ind, all_iv, simplex)
+            else:
+                f_X[:, j] = c
+        return X[:, part], f_X[:, part]
 
     def compute_fp(self, simplex, con, theta_ind):
 
+        erglistx0 = []
+        erglistpi = []
         [vals, rows, col_pointer] = simplex
         dim = len(vals)
-        c = np.zeros(dim+1)
+        if dim == 0:
+            return 0, {}
+        cs_bz = np.zeros(dim)
+        co = 0
+        all_iv = {}
         for d in range(dim):
-            v_ind = self.V.index(self.E[col_pointer[d]][0])
-            if rows[d] == 2:
-                print("flasc")
+            ro = rows[d]
+            try:
+                while d >= col_pointer[co + 1]:
+                    co += 1
+            except IndexError:
+                pass
+            v_ind = self.V.index(self.E[co][0])
             len_dp_act = len(self.get_outgoing_active_edges(rows[d], self.V[v_ind], theta_ind=theta_ind))
-            c[d] = self.b[rows[d]][v_ind] / len_dp_act
+            cs_bz[d] = 1 / len_dp_act
+            if (ro, v_ind) not in all_iv.keys():
+                all_iv[(ro, v_ind)] = [d]
+            else:
+                all_iv[(ro, v_ind)].append(d)
 
-        # transformiere cs auf Standardsimplex durch Normieren
-        c /= np.linalg.norm(c)
-        k = 2
+        k = 3
+        # transformiere 'cs_bz' auf Standardsimplex
+        cs_bz *= 1.0 / len(all_iv.keys())
+        epsilon = 0.5
+        for i in range(dim):
+            if self.eps < cs_bz[i] < epsilon:
+                epsilon = cs_bz[i]
+        epsilon = 1/(2*k+2)
+        epsilon *= 0.5
+        #epsilon = random() * 0.5
+        v_eps = np.zeros(dim)
+        for i in range(0, dim, 2):
+            v_eps[i] += epsilon**(i+1)
+        for i in range(1, dim, 2):
+            v_eps[i] -= epsilon**(i+1)
+        v_eps_sum = sum(v_eps)
+        for i in range(dim):
+            if cs_bz[i] + v_eps[i] > v_eps_sum:
+                v_eps[i] -= v_eps_sum
+                break
+        #cs_bz += v_eps
         fpk = []
         while True:
-            if len(fpk) > 1 and np.linalg.norm(fpk[-2] - fpk[-1]) < self.eps:
-                return fpk[-1]
-            xc0 , pi_c = self.find_ancestor_simplex(k, c)
-            Xc, f_Xc = self.fk_on_tk(xc0, pi_c, con, simplex, theta_ind, c, k)
+            print("k", k, "FPK", fpk)
+            if len(fpk) > 2 and np.linalg.norm(fpk[-2] - fpk[-1]) < self.eps:
+                print("FOLGE", fpk)
+                return fpk[-1], all_iv
+            # HIER WEITER: folgendes wurde immer für jedes k gemacht (ineffizient da gleich). jetzt lieber für späteres
+            # k altes x0, pi (angepasst) verwenden um in der nähe des alten fixpunkts zu starten?
+            if k == 3:
+                start_node = cs_bz
+            else:
+                start_node = fpk[-1]
+            #start_node = np.zeros(dim)
+            #start_node[-1] = 1
+            print("startnode", start_node)
+            xc0 , pi_c = self.find_ancestor_simplex(k, start_node)
+            Xc, f_Xc = self.fk_on_tk(xc0, pi_c, con, simplex, all_iv, theta_ind, cs_bz, k)
 
-            # bestimme baryzentrische Koordinaten von c bzgl. X[:][0], ..., X[:][dim]
-            bz = self.bary_coords(Xc, c)
+            # bestimme baryzentrische Koordinaten von cs_bz bzgl. Xc[:, 0], ..., Xc[:, dim]
+            bz = self.bary_coords(Xc, start_node)
+            '''
+            while np.any(bz < self.eps):
+                bz0 = np.where(bz < self.eps)[0][0]
+                cs_bz[bz0] += 1/(k+3) 
+                for i in range(dim):
+                    if cs_bz[i] > 1/(k+3) + self.eps and i != bz0:
+                        cs_bz[i] -= 1/(k+3)
+                        break
+                bz = self.bary_coords(Xc, cs_bz)'''
             # berechne f_k(c) mit den bary. Koordinaten von c bzgl. X und deren Funktionswerten f_k(X)
-            fk_c = np.zeros(dim+1)
-            for i in range(dim+1):
-                # HIER WEITER: Welche der Dimensionen ist falsch. Habe heute dim von c auf dim gesetzt (statt dim+1)
-                fk_c += bz[i] * f_Xc[:, i]
+            fk_c = np.zeros(dim)
+            if dim == 1:
+                fk_c[0] = f_Xc[0]
+            else:
+                for i in range(dim):
+                    fk_c += bz[i] * f_Xc[:, i]
 
-            r = fk_c - c  # cs = c + kappa * r, mit kappa max., s.d. cs >= 0.
+            r = fk_c - start_node  # cs = c + kappa * r, mit kappa max., s.d. cs >= 0.
+            if np.max(r) < self.eps:
+                fpk.append(start_node)
+                k += 2
+                continue
             epsilon = 0.5
-            for i in range(dim+1):
-                if abs(r[i]) < epsilon:
+            for i in range(dim):
+                if self.eps < abs(r[i]) < epsilon:
                     epsilon = abs(r[i])
             epsilon *= 0.5
-            v_eps = np.zeros(dim+1)
+            v_eps = np.zeros(dim)
+            """
+            if dim % 2:
+                # wähle 'sign' so, dass v_eps[dim] > 0. (Weil sonst r[dim] < 0 und somit später kappa = 0)
+                sign = -1
+            else:
+                sign = 1
             for i in range(0, dim+1, 2):
-                v_eps[i] = epsilon/(i+1)
+                v_eps[i] = sign * epsilon/(i+1)
             for i in range(1, dim+1, 2):
-                v_eps[i] = -epsilon/i
+                v_eps[i] = -sign * epsilon/i
             # falls 'dim' gerade, so wird zweite 'for'-Schleife einmal weniger durchlaufen als die erste
             if not dim % 2:
-                v_eps[dim-1] -= epsilon/(dim+1)
+                v_eps[dim-1] -= epsilon / (dim+1)
+            """
+            start_node_zeros = np.where(start_node < self.eps)[0]
+
+            for i in range(0, dim, 2):
+                v_eps[i] = epsilon * (10**(-(i % 6) - 1))
+            for i in range(1, dim, 2):
+                if i in start_node_zeros:
+                    v_eps[i] = epsilon * (10**(-(i % 6) - 1))
+                else:
+                    v_eps[i] = -epsilon * (10**(-(i % 6) - 1))
+            v_eps_sum = sum(v_eps)
+            if v_eps_sum > self.eps:
+                # einfacher?
+                for i in range(dim):
+                    if i not in start_node_zeros:
+                        v_eps[i] -= v_eps_sum
+                        break
+            '''
+            for i in range(0, dim, 2):
+                v_eps[i] = epsilon**(i+1)
+            for i in range(1, dim, 2):
+                if i in cs_bz_zeros:
+                    v_eps[i] = epsilon**i
+                else:
+                    v_eps[i] = -epsilon**i
+            v_eps_sum = sum(v_eps)
+            if v_eps_sum > self.eps:
+                # einfacher?
+                for i in range(dim):
+                    if i not in cs_bz_zeros:
+                        v_eps[i] -= v_eps_sum
+                        break'''
             # Perturbation von 'r'
             r += v_eps
-            kappa = np.Inf
-            for i in range(dim+1):
-                if c[i] + kappa * r[i] < -self.eps:
-                    kappa = -c[i]/r[i]
-            cs = c + kappa * r
+            # HIER WEITER: perturbation von r so nicht korrekt!? da epsilon so klein wird r nicht ausreichend perturbiert!?
+            #r = np.zeros(dim)
+            #r[0] = -0.1
+            #r[1] = -0.66
+            #r[2] = 0.45
+            #r[3] = 0.31
+            kappa = 1/self.eps
+            for i in range(dim):
+                if start_node[i] + kappa * r[i] < -self.eps:
+                    kappa = -start_node[i] / r[i]
+            cs = start_node + kappa * r
             x0, pi = self.find_ancestor_simplex(k, cs)
-            X, f_X = self.fk_on_tk(x0, pi, con, simplex, theta_ind, c, k)
+            X, f_X = self.fk_on_tk(x0, pi, con, simplex, all_iv, theta_ind, cs_bz, k)
 
-            L = np.zeros((dim+2, dim+1))
-            for d in range(dim+1):
-                L[:dim+1, d] = f_X[:, d] - X[:, d]
-                L[dim+1, d] = 1
+            L = np.zeros((dim+1, dim))
+            for d in range(dim):
+                L[:dim, d] = f_X[:, d] - X[:, d]
+                L[dim, d] = 1
 
-            tf = np.concatenate((np.zeros(dim+2), np.ones(dim+2)))
-            r = np.append(r, 1).reshape((dim+2, 1))
-            A_total = np.concatenate((L, r, np.eye(dim+2)), axis=1)
-            b_total = np.zeros(dim+2)
+            tf = np.concatenate((np.zeros(dim+1), np.ones(dim+1)))
+            r = np.append(r, 1).reshape((dim+1, 1))
+            A_total = np.concatenate((L, r, np.eye(dim+1)), axis=1)
+            b_total = np.zeros(dim+1)
             b_total[-1] = 1
-            basic_sol = linprog(tf, A_eq=A_total, b_eq=b_total)  # [:2*dim+5]
-            y = basic_sol[:dim+1]
-            z = basic_sol[dim+1]
-            fun = basic_sol[-1]
+            basic_sol = linprog(tf, A_eq=A_total, b_eq=b_total, method='simplex') #, options={'bland': True})
+            y = basic_sol.x[:dim]
+            z = basic_sol.x[dim]
+            fun = basic_sol.fun
 
+            # aktueller Simplex hat keine zulässige Lsg. Siehe CEavesAnOddThm: S0 als (n-1)-Simplex enthält bfs. Aber
+            # wie
+            # ist das hier zu interpretieren, wo ich doch die dim schon um 1 verringert habe? -> 0 wieder zu
+            # überdeckungssimplex hinzu nehmen!? dann v0 aus paper gleich 0: f(v0) - v0 = f(v0) = csbz ...
+            # v1, ..., vn sind dann die knoten dich ich hier schon habe
             if fun > self.eps:
                 raise TypeError('Basic feasible solution can\'t be found')
             if z < self.eps:
-                xk = np.zeros(dim+1)
-                for d in range(dim+1):
-                    xk += y[d] * X[:][d]
+                xk = np.zeros(dim)
+                for d in range(dim):
+                    xk += y[d] * X[:, d]
                 fpk.append(xk)
-                k += 1
+                k += 2
                 continue
-                # return x0, pi, y
 
-
-            s = y.index(0)
+            s = np.where(y < self.eps)[0][0]
             while True:
-                if s == dim:
-                    L_s = L[:][:s]
+                if s == dim-1:
+                    L_s = L[:, :s]
+                elif s == 0:
+                    L_s = L[:, 1:]
                 else:
-                    L_s = np.concatenate((L[:][:s], L[:][s+1:]))
-                L_s = np.concatenate((L_s, r_total))
-                lam = np.linalg.solve(L_s, L[:][s])  # Darstellung von 'L[:][s]' als Linearkomb. der Spalten von 'L_s'
+                    L_s = np.concatenate((L[:, :s], L[:, s+1:]), axis=1)
+                L_s = np.concatenate((L_s, r), axis=1)
+                # HIER WEITER: nochmal drüber schauen:
+                q, rtriangle = np.linalg.qr(L_s)
+                qLs = q.T.dot(L[:, s])
+                mu = np.zeros(dim)
+                mu[dim-1] = qLs[dim-1] / rtriangle[dim-1, dim-1]
+                if abs(mu[dim-1]) < self.eps:
+                    mu[dim-1] = 0
+                for ind in range(dim - 2, -1, -1):
+                    if abs(rtriangle[ind, ind]) < self.eps:
+                        # ???
+                        # mu[ind] = -1
+                        continue
+                    mursum = 0
+                    for j in range(dim - 1, ind, -1):
+                        mursum += mu[j] * rtriangle[ind, j]
+                    mu[ind] = (qLs[ind] - mursum) / rtriangle[ind, ind]
+                    if abs(mu[ind]) < self.eps:
+                        mu[ind] = 0
+                #lam = np.linalg.solve(L_s[:-1, :], L[:, s])  # Darstellung von 'L[:, s]' als Linearkomb. der Spalten von 'L_s'
+                #lam = np.linalg.solve(L_s, L[:, s])  # Darstellung von 'L[:, s]' als Linearkomb. der Spalten von 'L_s'
 
-                y_range = range(dim+1) - [s]
-                delt = np.Inf
-                t = np.Inf
+                delt = 1/self.eps
+                t = 1/self.eps
+                y_range = list(set(range(dim)) - {s})
                 for col in y_range:
-                    if y[col] - lam[col] * delt < self.eps:
-                        delt = y[col]/lam[col]
+                    if col > s:
+                        mucol = col - 1
+                    else:
+                        mucol = col
+                    if y[col] - mu[mucol] * delt < -self.eps:
+                        delt = y[col]/mu[mucol]
                         t = col
-                if z - lam[dim+1] * delt < self.eps:
-                    delt = z/lam[dim+1]
+                if z - mu[dim-1] * delt < -self.eps:
+                    delt = z/mu[dim-1]
 
-                delta_y = np.concatenate((-lam[:s] * delt, delt, -lam[s:-1] * delt))
-                delta_z = -lam[-1] * delt
+                delta_y = np.concatenate((list(-mu[:s] * delt), [delt], list(-mu[s:-1] * delt)))
+                delta_z = -mu[-1] * delt
                 yss = y + delta_y
                 zss = z + delta_z
+                # HIER WEITER: wieso geht z gegen 1??
 
                 if zss < self.eps:
-                    xk = np.zeros(dim+1)
-                    for d in range(dim+1):
-                        xk += y[d] * X[:][d]
+                    xk = np.zeros(dim)
+                    for d in range(dim):
+                        xk += yss[d] * X[:, d]
                     fpk.append(xk)
+                    erglistx0.append(x0)
+                    erglistpi.append(pi)
                     break
                     # return x0, pi, yss
 
+                L_rows = L.shape[0]
                 if t == 0:
-                    x0[pi[0]-1] -= 1.0/k
-                    x0[pi[0]] += 1.0/k
+                    x0[pi[0]-1] -= 1
+                    x0[pi[0]] += 1
                     j1 = pi.pop(0)
                     pi.append(j1)
-                    yss.pop(0)
-                    yss.append(0)
-                    L = np.concatenate((L[:][1:], L[:][-1]))
-                    s = dim
-                elif t == dim:
-                    x0[pi[-1]-1] += 1.0/k
-                    x0[pi[-1]] -= 1.0/k
+                    yss = np.delete(yss, 0)
+                    yss = np.append(yss, 0)
+                    xt, fxt = self.fk_on_tk(x0, pi, con, simplex, all_iv, theta_ind, cs_bz, k, [dim-1])
+                    lt = fxt - xt
+                    lt = np.append(lt, 1)
+                    L = np.concatenate((L[:, 1:], lt.reshape((L_rows, 1))), axis=1)
+                    s = dim - 1
+                elif t == dim - 1:
+                    x0[pi[-1]-1] += 1
+                    x0[pi[-1]] -= 1
                     jn = pi.pop(-1)
                     pi.insert(0, jn)
-                    yss.pop(-1)
-                    yss.insert(0, 0)
-                    L = np.concatenate((L[:][0], L[:][:-1]))
+                    yss = np.delete(yss, -1)
+                    yss = np.insert(yss, 0, 0)
+                    xt, fxt = self.fk_on_tk(x0, pi, con, simplex, all_iv, theta_ind, cs_bz, k, [0])
+                    lt = fxt - xt
+                    lt = np.append(lt, 1)
+                    L = np.concatenate((lt.reshape((L_rows, 1)), L[:, :-1]), axis=1)
                     s = 0
                 else:
-                    pi_old = pi
+                    '''
+                    # table 1 falsch!? eigener Versuch: Vertausche Spalten in L:
+                    L_old = L.copy()
+                    if t < dim - 2:
+                        L = np.concatenate((L_old[:, :t], L_old[:, t+1].reshape((L_rows, 1)), L_old[:, t].reshape((L_rows, 1)), L_old[:, t+2:]), axis=1)
+                    else:
+                        # t = dim - 2
+                        try:
+                            L = np.concatenate((L_old[:, :t], L_old[:, t+1].reshape((L_rows, 1)), L_old[:, t].reshape((L_rows, 1))), axis=1)
+                        except TypeError:
+                            print("da")'''
+                    pi_old = pi.copy()
                     pi[t-1] = pi[t]
                     pi[t] = pi_old[t-1]
+                    xt, fxt = self.fk_on_tk(x0, pi, con, simplex, all_iv, theta_ind, cs_bz, k, [t])
+                    lt = fxt - xt
+                    lt = np.append(lt, 1)
+                    L[:, t] = lt
                     s = t
                 y = yss
                 z = zss
 
-            k += 1
-
-        # wollen eine erste bfs bestimmen. phase 1 simplex? oder kann nicht-degeneriertheit verwendet werden? z.b. lin.
-        # abh. Spalte finden -> bringt nicht so viel, weil dann rest des systems immer noch gelöst werden muss? also
-        # einfach doch sofort lösen? -> phase 1 simplex. Aber wie funktioniert dann pivot schritt? pivotvariable leicht
-        # zu bestimmen, da einzige 0-variable. dann linearkombination von dieser spalte mithilfe der anderen spalten
-        # finden. Diese liefert infos über verhalten der anderen variablen bei erhöhung der pivotvariable. Dann einfach die
-        # finden die zuerst 0 wird -> neue pivotvariable. so lange machen bis z=0 dann fertig! was passier dann in table
-        # 1? keine änderung außer die eine vertauschung in pi? was soll "deleting X^t" bedeuten?
-
-
+            k += 2
 
     def main(self):
         """
@@ -692,9 +922,9 @@ class ContAppMulti:
         theta = 0
         # Obergrenze für theta
         T = 10000
-        # Aufteilung des Flusses
-        x_total = self.I * [np.zeros(self.m)]
         stop_outflow = []
+        simplex = [[], [], []]
+        all_iv = {}
         while theta < T:
             # in der Zukunft liegende Zeitpunkte aus der Liste 'self.u_start'
             start_points = [t for t in self.u_start if t > theta]
@@ -705,101 +935,187 @@ class ContAppMulti:
             # Liste aller Kanten, deren Warteschlange in der aktuellen Phase 0 wird, und deren f^- -Werte auf 0
             # gesetzt werden müssen
             fm_to_zero = []
+            # Aufteilung des Flusses
+            x_total = np.zeros((self.I, self.m))
             # 'next_phase' bestimmt am Ende der Schleife, wie lange aktuelle Phase andauert
             if len(start_points) > 0 or len(stop_outflow) > 0:
                 next_phase = np.min(start_points + stop_outflow) - theta
             else:
                 next_phase = T
             self.flow_vol = np.zeros(self.n)
+            # Anz. Güter je Knoten, die aktuell eine Entscheidung über Flussaufteilung treffen müssen
+            com_no = np.zeros(self.n)
             for v_ind in range(self.n):
                 v = self.V[v_ind]
                 for i in range(self.I):
                     # speichere b - Wert
                     self.b[i][v_ind] = self.calc_b(i, v, theta)
-                    self.flow_vol[v_ind] += self.b[i][v_ind]
-            for ti in range(self.I):
-                top_ord = self.topologicalSort(ti)
-                for v in top_ord:
-                    if ti == 2:
-                        print("flasc")
-                    simplex = self.find_cover_simplex(theta_ind)
-                    A_1 = np.zeros((self.I * (self.n-1), self.I * self.m))
-                    A_2 = np.zeros((self.I, self.I * self.m))
+                    if self.b[i][v_ind] > self.eps:
+                        com_no[v_ind] += 1
+                        self.flow_vol[v_ind] += self.b[i][v_ind]
+            simplex = self.find_cover_simplex(theta_ind)
+            var_no = len(simplex[0])
+            rows, col_pointer = simplex[1:]
+            A_1 = np.zeros((self.I, var_no))
+            # A_1 = np.zeros((self.I * (self.n-1), self.I * self.m))
+            # A_2 = np.zeros((self.I, self.I * self.m))
 
-                    b_1 = np.zeros(self.I * (self.n-1))
-                    b_2 = np.zeros(self.I)
+            b_1 = np.zeros(self.I * (self.n-1))
 
-                    for i in range(self.I):
-                        V_i = list(set(self.V) - set(['t{}'.format(i+1)]))
-                        for v in V_i:
-                            vi_ind = V_i.index(v)
-                            b_1[i * (self.n-1) + vi_ind] = self.b[i][self.V.index(v)]
-                            delta_v = self.get_outgoing_edges(v)  # Liste der Kantenindizes
-                            for e_ind in delta_v:
-                                A_1[i * (self.n-1) + vi_ind][i * self.m + e_ind] = 1
+            co = 0
+            for ro in range(var_no):
+                i = rows[ro]
+                while col_pointer[co + 1] <= ro:
+                    co += 1
+                e = self.E[co]
+                v = e[0]
+                v_ind = self.V.index(v)
+                A_1[i, ro] = 1
+            b_1 = np.ones(A_1.shape[0])
 
-                        for v in self.V:
-                            if i == 2:
-                                print("flasc")
-                            delta_v_inact = list(set(self.get_outgoing_edges(v)) - set(self.get_outgoing_active_edges(i, v)))
-                            for e_ind in delta_v_inact:
-                                A_2[i][i * self.m + e_ind] = 1
-                    col_changes = [0]
-                    len_cp = len(simplex[2])
-                    for cp in range(1, len_cp):
-                        if simplex[2][cp] != simplex[2][cp-1]:
-                            col_changes.append(cp)
-                    # col_changes.pop(-1)
-                    A_1 = A_1[:, col_changes]
-                    A_2 = A_2[:, col_changes]
-                    A = np.concatenate((A_1, A_2))
-                    b = np.concatenate((b_1, b_2))
-                    con = [A, b]
-                    x = self.compute_fp(simplex, con, theta_ind)
-                    for e_ind in active_paths:
-                        x_total[ti][e_ind] += x[active_paths.index(e_ind)]
-            x_sum = np.zeros(self.m)
-            for e_ind in range(self.m):
-                x_sum[e_ind] += np.sum([x_total[i][e_ind] for i in range(self.I)])
-
-            firstcom = self.m * [True]
-            for ti in range(self.I):
-                top_ord = self.topologicalSort(ti)
-                for v in top_ord:
-                    v_ind = self.V.index(v)
-                    if ti == 2:
-                        print("flasc")
-                    active_paths = self.get_outgoing_active_edges(ti, v)
-                    bi = self.calc_b(ti, v, theta)
-                    if self.flow_vol[v_ind] > self.eps:
-                        flow_ratio = float(bi)/self.flow_vol[v_ind]
+            '''
+            for i in range(self.I):
+                ti_ind = self.V.index('t{}'.format(i+1))
+                for v_ind in range(self.n):
+                    if v_ind < ti_ind:
+                        vi_ind = v_ind
+                    elif v_ind == ti_ind:
+                        continue
                     else:
-                        flow_ratio = 0
-                    firstedge = True
+                        vi_ind = v_ind - 1
+                    # b_1[i * (self.n-1) + vi_ind] = self.b[i][v_ind]
+                    # nicht b_{i,v}, sondern seine bary. Koordinaten, da wir in Standardsimplex arbeiten
+                    if self.b[i][v_ind] > self.eps:
+                        b_1[i * (self.n-1) + vi_ind] = 1
+                    else:
+                        b_1[i * (self.n-1) + vi_ind] = 0
+                    delta_v = self.get_outgoing_edges(self.V[v_ind])  # Liste der Kantenindizes
+                    for e_ind in delta_v:
+                        # A_1[i * (self.n-1) + vi_ind, i * self.m + e_ind] = 1
+                        A_1[i * (self.n-1) + vi_ind, self.I * e_ind + i] = 1
+
+                for v in self.V:
+                    delta_v_inact = list(set(self.get_outgoing_edges(v)) - set(self.get_outgoing_active_edges(i, v)))
+                    for e_ind in delta_v_inact:
+                        # A_2[i, i * self.m + e_ind] = 1
+                        A_2[i, self.I * e_ind + i] = 1'''
+
+            '''col_changes = []
+            zero_cols = []
+            for i in range(self.I):
+                for cp in range(1, self.m + 1):
+                    if simplex[2][cp] != simplex[2][cp-1]:
+                        col_changes.append(cp - 1 + i * self.m)
+            for i in range(self.I):
+                for v_ind in range(self.n):
+                    if self.b[i][v_ind] < self.eps:
+                        delta_p = self.get_outgoing_edges(self.V[v_ind])
+                        for e_ind in delta_p:
+                            zero_cols.append(i * self.m + e_ind)
+            col_changes_cpy = col_changes.copy()
+            col_changes = [c for c in col_changes_cpy if c not in zero_cols]
+            A_1 = A_1[:, col_changes]
+            A_1 = np.concatenate((A_1, np.zeros(self.I * (self.n - 1)).reshape(self.I * (self.n - 1), 1)), axis=1)
+            A_2 = A_2[:, col_changes]
+            A_2 = np.concatenate((A_2, np.zeros(self.I).reshape(self.I, 1)), axis=1)'''
+            con = [A_1, b_1]
+            all_iv_old = all_iv.copy()
+            x, all_iv = self.compute_fp(simplex, con, theta_ind)
+            all_iv_old_keys = all_iv_old.keys()
+            for (i, v_ind) in all_iv_old_keys:
+                delta_p = self.get_outgoing_edges(self.V[v_ind])
+                # delta_p_act = self.get_outgoing_active_edges(v)
+                # delta_p_inact = [e for e in delta_p if e not in delta_p_act]
+                if (i, v_ind) not in all_iv:
+                    for e_ind in delta_p:
+                        if self.fp[i][e_ind][-1][1] > self.eps:
+                            self.fp[i][e_ind].append((theta, 0))
+                            self.fp_ind[i][e_ind].append(theta_ind)
+                '''
+                else:
+                    for e_ind in delta_p_inact:
+                        if self.fp[i][e_ind][-1][1] > self.eps:
+                            self.fp[i][e_ind].append(theta, 0)'''
+
+            x_sum = np.zeros(self.m)
+            if not isinstance(x, int):
+                dim = len(x)  # - 1
+                rows, col_pointer = simplex[1:]
+                co = 0
+                for d in range(dim):
+                    try:
+                        while col_pointer[co+1] <= d:
+                            co += 1
+                    except IndexError:
+                        pass
+                    v_ind = self.V.index(self.E[co][0])
+                    x_total[rows[d], co] = x[d] * self.b[rows[d]][v_ind] * len(all_iv.keys())
+                    # x_total[rows[d], co] = x[d] * self.b[rows[d]][v_ind] * com_no[v_ind]
+                for e_ind in range(self.m):
+                    x_sum[e_ind] = np.sum([x_total[i, e_ind] for i in range(self.I)])
+
+            top_ord = []
+            all_edge_outflows = [[] for _ in range(self.m)]
+            for ti in range(self.I):
+                top_ord.append(self.topologicalSort(ti))
+                for v in top_ord[ti]:
+                    v_ind = self.V.index(v)
+                    active_paths = self.get_outgoing_active_edges(ti, v)
+                    # if self.flow_vol[v_ind] > self.eps:
+                    #     flow_ratio = self.b[ti][v_ind]/self.flow_vol[v_ind]
+                    # else:
+                    #     flow_ratio = 0
                     # betrachte aktive Kanten
                     for e_ind in active_paths:
-                        e = self.E[e_ind]
-
                         if theta == 0:
-                            start_ind = self.V.index(e[0])
-                            if len(self.u[ti][start_ind]) > 0 and self.u[ti][start_ind][0][0] == 0:
-                                self.fp[ti][e_ind][0] = (0, x_total[ti][e_ind])
+                            if len(self.u[ti][v_ind]) > 0 and self.u[ti][v_ind][0][0] == 0:
+                                self.fp[ti][e_ind][0] = (0, x_total[ti, e_ind])
                                 self.fp_ind[ti][e_ind].append(0)
+                                if x_total[ti, e_ind] > self.eps:
+                                    all_edge_outflows[e_ind].append(ti)
                         # falls sich f^+ -Wert in dieser Phase ändert, aktualisiere 'self.fp'
-                        elif abs(self.fp[ti][e_ind][-1][1] - x_total[ti][e_ind]) > self.eps:
-                            self.fp[ti][e_ind].append((theta, x_total[ti][e_ind]))
+                        elif abs(self.fp[ti][e_ind][-1][1] - x_total[ti, e_ind]) > self.eps:
+                            self.fp[ti][e_ind].append((theta, x_total[ti, e_ind]))
                             self.fp_ind[ti][e_ind].append(theta_ind)
+                            if x_total[ti, e_ind] > self.eps:
+                                all_edge_outflows[e_ind].append(ti)
+                        if x_sum[e_ind] > self.eps:
+                            flow_ratio = x_total[ti, e_ind] / x_sum[e_ind]
+                        else:
+                            flow_ratio = 0
                         if self.q_global[theta_ind][e_ind] > self.eps:
-                            outflow_time = theta + self.r[e_ind]
+                            outflow_time = theta + float(self.q_global[theta_ind][e_ind])/self.nu[e_ind] + self.r[e_ind]
                             outflow = self.nu[e_ind] * flow_ratio
                         else:
-                            outflow_time = theta + float(self.q_global[theta_ind][e_ind])/self.nu[e_ind] + self.r[e_ind]
-                            outflow = np.min([x_total[ti][e_ind], self.nu[e_ind]]) * flow_ratio
+                            outflow_time = theta + self.r[e_ind]
+                            if x_sum[e_ind] < self.nu[e_ind] + self.eps:
+                                outflow = x_total[ti, e_ind]
+                            else:
+                                outflow = self.nu[e_ind] * flow_ratio
                         fm_ind = self.last_fm_change(ti, e_ind, outflow_time)
                         # falls sich f_{ti}^- -Wert durch die Flussaufteilung in dieser Phase ändert, aktualisiere 'self.fm'
                         if abs(self.fm[ti][e_ind][fm_ind][1] - outflow) > self.eps:
                             self.fm[ti][e_ind].append((outflow_time, outflow))
 
+            # Alles falsch?
+            '''
+            for e_ind in range(self.m):
+                if len(all_edge_outflows[e_ind]) > 1:
+                    total_outflow = 0
+                    for i in all_edge_outflows[e_ind]:
+                        total_outflow += self.fm[i][e_ind][-1][1]
+                    for i in all_edge_outflows[e_ind]:
+                        outflow_time = self.fm[i][e_ind][-1][0]
+                        outflow = self.fm[i][e_ind][-1][1] / total_outflow
+                        self.fm[i][e_ind][-1] = (outflow_time, outflow)'''
+
+            firstcom = self.m * [True]
+            for ti in range(self.I):
+                for v in top_ord[ti]:
+                    v_ind = self.V.index(v)
+                    active_paths = self.get_outgoing_active_edges(ti, v)
+                    firstedge = True
+                    for e_ind in active_paths:
                         # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
                         last_fm_ind = self.last_fm_change(ti, e_ind, theta)
                         if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and \
@@ -811,7 +1127,7 @@ class ContAppMulti:
 
                         change_of_c = self.change_of_cost(e_ind, theta, x_sum[e_ind])
                         change_of_q = change_of_c * self.nu[e_ind]
-                        new_del_plus = change_of_c + self.del_plus_label[ti][self.V.index(e[1])]
+                        new_del_plus = change_of_c + self.del_plus_label[ti][self.V.index(self.E[e_ind][1])]
                         # prüfe, ob Änderung des Labels von Knoten 'v' angepasst werden muss
                         if firstedge or new_del_plus < self.del_plus_label[ti][v_ind]:
                             self.del_plus_label[ti][v_ind] = new_del_plus
@@ -836,9 +1152,7 @@ class ContAppMulti:
                 # erneuter Durchlauf der vorherigen Schleife, diesmal werden die inaktiven Kanten betrachtet. Diese Aufteilung ist
                 # notwendig, damit die Änderungen der Knotenlabels erst richtig gesetzt (siehe Schleife zuvor), und dann für weitere
                 # Rechnungen (siehe nachstehende Schleife) verwendet werden.
-                for v in top_ord:
-                    if ti == 2:
-                        print("flasc")
+                for v in top_ord[ti]:
                     active_paths = self.get_outgoing_active_edges(ti, v)
                     delta_p = self.get_outgoing_edges(v)
                     inactive_paths = [e for e in delta_p if e not in active_paths]
@@ -884,7 +1198,7 @@ class ContAppMulti:
                         for i in range(len_act):
                             active_ind = active_paths[i]
                             # bestimme Kante, die während der gesamten Phase für Gut 'ti' aktiv bleibt
-                            if x_total[ti][active_ind] > 0 or i == len_act - 1:
+                            if x_total[ti, active_ind] > 0 or i == len_act - 1:
                                 # Änderung der Kosten dieser Kante
                                 active_change = self.change_of_cost(active_ind, theta, x_sum[active_ind])
                                 break
@@ -951,12 +1265,12 @@ class ContAppMulti:
                             if abs(self.labels[i][-1][v_ind] - self.labels[i][-1][w_ind] - self.c[-1][edge]) < self.eps:
                                 self.E_active[i][-1][edge] = 1
 
+                fm_to_zero = list(set(fm_to_zero))
                 for e_ind in fm_to_zero:
                     for i in range(self.I):
-                        self.fm[i][e_ind].append((theta + self.r[e_ind], 0))
-                        stop_outflow[i].append(theta + self.r[e_ind])
-
-            print(theta)
+                        if self.fm[i][e_ind][-1][1] > self.eps:
+                            self.fm[i][e_ind].append((theta + self.r[e_ind], 0))
+                            stop_outflow.append(theta + self.r[e_ind])
 
         for i in range(self.I):
             # am Ende sind alle f^+ -Werte 0
