@@ -619,8 +619,6 @@ class ContAppMulti:
 
     def compute_fp(self, simplex, con, theta_ind):
 
-        erglistx0 = []
-        erglistpi = []
         [vals, rows, col_pointer] = simplex
         dim = len(vals)
         if dim == 0:
@@ -858,8 +856,6 @@ class ContAppMulti:
                     for d in range(dim):
                         xk += yss[d] * X[:, d]
                     fpk.append(xk)
-                    erglistx0.append(x0)
-                    erglistpi.append(pi)
                     break
                     # return x0, pi, yss
 
@@ -912,6 +908,88 @@ class ContAppMulti:
                 z = zss
 
             k += 2
+
+    def lt_algo(self, simplex, con, theta_ind):
+        [vals, rows, col_pointer] = simplex
+        dim = len(vals)
+        if dim == 0:
+            return 0, {}
+        cs_bz = np.zeros(dim)
+        co = 0
+        all_iv = {}
+        for d in range(dim):
+            ro = rows[d]
+            try:
+                while d >= col_pointer[co + 1]:
+                    co += 1
+            except IndexError:
+                pass
+            v_ind = self.V.index(self.E[co][0])
+            len_dp_act = len(self.get_outgoing_active_edges(rows[d], self.V[v_ind], theta_ind=theta_ind))
+            cs_bz[d] = 1 / len_dp_act
+            if (ro, v_ind) not in all_iv.keys():
+                all_iv[(ro, v_ind)] = [d]
+            else:
+                all_iv[(ro, v_ind)].append(d)
+
+        k = 3
+        # transformiere 'cs_bz' auf Standardsimplex
+        cs_bz *= 1.0 / len(all_iv.keys())
+
+        v0, pi = self.find_ancestor_simplex(k, cs_bz)
+        # Im Fall 'part=[0]' ist 'pi' irrelevant
+        fv0 = self.fk_on_tk(v0, [], con, simplex, all_iv, theta_ind, cs_bz, k, part=[0])[1]
+        lv0 = fv0 - v0 + np.ones(dim)
+        base = np.eye(dim)
+        j = np.argmax(lv0)
+        base[:, j] = lv0
+        qj = np.zeros(dim)
+        qj[j] = -1
+        qj[j+1] = 1
+        T = [j]
+        gamma = [j]
+        R = np.zeros(dim)
+        L = [lv0]
+        tauw = [v0]
+        t = 1
+        while True:
+            wt_next = tauw[-1] + qj
+            tauw.append(wt_next)
+            # Im Fall 'part=[0]' ist 'pi' irrelevant
+            fvt_next = self.fk_on_tk(wt_next, [], con, simplex, all_iv, theta_ind, cs_bz, k, part=[0])[1]
+            lvt_next = fvt_next - wt_next + np.ones(dim)
+            if lvt_next in L:
+                s = L.index(lvt_next)
+                if s == 0:
+                    qgamma1 = np.zeros(dim)
+                    qgamma1[gamma[0]] = -1
+                    qgamma1[gamma[0] + 1] = 1
+                    tauw[0] += qgamma1
+                    g0 = gamma[0]
+                    gamma = np.delete(gamma, 0)
+                    gamma = np.append(gamma, g0)
+                    R[g0] += 1
+                elif s == t:
+                    qgammat = np.zeros(dim)
+                    gt = gamma.pop()
+                    gamma = np.insert(gamma, gt, 0)
+                    qgammat[gt] = -1
+                    qgammat[gt + 1] = 1
+                    tauw[0] -= qgammat
+                    R[gt] -= 1
+                else:
+                    gs = gamma[s]
+                    gamma[s] = gamma[s-1]
+                    gamma[s-1] = gs
+                qtm = np.zeros(dim)
+                for i in range(s):
+                    qtm[gamma[i] - 1] -= 1
+                    qtm[gamma[i]] += 1
+                ws = tauw[0] + qtm
+
+            else:
+                L.append(lvt_next)
+                # pivortiere lvt_next in base
 
     def main(self):
         """
