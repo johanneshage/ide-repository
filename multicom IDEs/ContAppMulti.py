@@ -935,61 +935,164 @@ class ContAppMulti:
         k = 3
         # transformiere 'cs_bz' auf Standardsimplex
         cs_bz *= 1.0 / len(all_iv.keys())
+        clss = []
 
-        v0, pi = self.find_ancestor_simplex(k, cs_bz)
-        # Im Fall 'part=[0]' ist 'pi' irrelevant
-        fv0 = self.fk_on_tk(v0, [], con, simplex, all_iv, theta_ind, cs_bz, k, part=[0])[1]
-        lv0 = fv0 - v0 + np.ones(dim)
-        base = np.eye(dim)
-        j = np.argmax(lv0)
-        base[:, j] = lv0
-        qj = np.zeros(dim)
-        qj[j] = -1
-        qj[j+1] = 1
-        T = [j]
-        gamma = [j]
-        R = np.zeros(dim)
-        L = [lv0]
-        tauw = [v0]
-        t = 1
         while True:
-            wt_next = tauw[-1] + qj
-            tauw.append(wt_next)
+            if len(clss) > 2 and np.linalg.norm(clss[-1][-1] - clss[-2][-1]) < self.eps:
+                return clss[-1]
+            v0, pi = self.find_ancestor_simplex(k, cs_bz)
             # Im Fall 'part=[0]' ist 'pi' irrelevant
-            fvt_next = self.fk_on_tk(wt_next, [], con, simplex, all_iv, theta_ind, cs_bz, k, part=[0])[1]
-            lvt_next = fvt_next - wt_next + np.ones(dim)
-            if lvt_next in L:
-                s = L.index(lvt_next)
-                if s == 0:
-                    qgamma1 = np.zeros(dim)
-                    qgamma1[gamma[0]] = -1
-                    qgamma1[gamma[0] + 1] = 1
-                    tauw[0] += qgamma1
-                    g0 = gamma[0]
-                    gamma = np.delete(gamma, 0)
-                    gamma = np.append(gamma, g0)
-                    R[g0] += 1
-                elif s == t:
-                    qgammat = np.zeros(dim)
-                    gt = gamma.pop()
-                    gamma = np.insert(gamma, gt, 0)
-                    qgammat[gt] = -1
-                    qgammat[gt + 1] = 1
-                    tauw[0] -= qgammat
-                    R[gt] -= 1
+            fv0 = self.fk_on_tk(v0, [], con, simplex, all_iv, theta_ind, cs_bz, k, part=[0])[1]
+            lv0 = fv0 - v0 + np.ones(dim)
+            base = np.eye(dim)
+            base_v = np.zeros((dim, dim))
+            base_y = np.ones(dim)
+            wt_next = v0
+            T = []
+            gamma = []
+            R = np.zeros(dim)
+            L = [lv0]
+            tauw = [v0]
+            t = 0
+            mu_no = dim
+            while True:
+                if mu_no == 0:
+                    clss.append(tauw)
+                    k += 1
+                    break
+                # Im Fall 'part=[0]' ist 'pi' irrelevant
+                fvt_next = self.fk_on_tk(wt_next, [], con, simplex, all_iv, theta_ind, cs_bz, k, part=[0])[1]
+                lvt_next = fvt_next - wt_next.reshape((dim, 1)) + np.ones(dim).reshape((dim, 1))
+                # pivotiere lvt_next in base
+                q, r = np.linalg.qr(base)
+                z = q.T.dot(lvt_next)
+                lam = np.zeros(dim)
+                lam[dim-1] = z[dim-1] / r[dim-1, dim-1]
+                for ind in range(dim-2, -1, -1):
+                    lamrsum = 0
+                    for j in range(dim-1, ind, -1):
+                        lamrsum += lam[j] * r[ind, j]
+                    lam[ind] = (z[ind] - lamrsum) / r[ind, ind]
+                delt = 1/self.eps
+                out = 1/self.eps
+                for j in range(dim):
+                    if base_y[j] - lam[j] * delt < -self.eps:
+                        delt = base_y[j] / lam[j]
+                        out = j
+                for j in range(dim):
+                    base_y[j] -= delt * lam[j]
+                base_y[out] = delt
+                if len(np.where(base[:, out] > self.eps)[0]) > 1:
+                    wt_next = base_v[:, out]
+                    base[:, out] = lvt_next.reshape(dim)
+                    base_v[:, out] = wt_next
                 else:
-                    gs = gamma[s]
-                    gamma[s] = gamma[s-1]
-                    gamma[s-1] = gs
-                qtm = np.zeros(dim)
-                for i in range(s):
-                    qtm[gamma[i] - 1] -= 1
-                    qtm[gamma[i]] += 1
-                ws = tauw[0] + qtm
-
-            else:
-                L.append(lvt_next)
-                # pivortiere lvt_next in base
+                    mu_no -= 1
+                    qi = np.zeros(dim)
+                    i = np.where(base[:, out] > self.eps)[0][0]
+                    qi[i] = -1
+                    qi[i+1] = 1
+                    tauw.append(tauw[-1] + qi)
+                    base[:, out] = lvt_next.reshape(dim)
+                    base_v[:, out] = wt_next
+                    wt_next = tauw[-1]
+                    T.append(i)
+                    gamma.append(i)
+                    # HIER WEITER: w^1 enthält Eintrag -1? R wird nie angepasst und somit wird einziger eintrag aus gamma gelöscht -> indexError
+                    t += 1
+                    continue
+                # if lvt_next in L:
+                    # s = L.index(lvt_next)
+                while True:
+                    if out == 0:
+                        qgamma1 = np.zeros(dim)
+                        qgamma1[gamma[0]] = -1
+                        qgamma1[gamma[0]+1] = 1
+                        tauw[0] += qgamma1
+                        g0 = gamma[0]
+                        gamma = np.delete(gamma, 0)
+                        gamma = np.append(gamma, g0)
+                        R[g0] += 1
+                        qj = np.zeros(dim)
+                        qj[gamma[0]] = -1
+                        qj[gamma[0]+1] = 1
+                        tauw.append(tauw[-1] + qj)
+                        wt_next = tauw[-1]
+                        del tauw[0]
+                        del L[0]
+                        L.append(lvt_next)
+                    elif out == t:
+                        qgammat = np.zeros(dim)
+                        gt = gamma[-1]
+                        gamma = np.delete(gamma, -1)
+                        gamma = np.insert(gamma, 0, gt)
+                        qgammat[gt] = -1
+                        qgammat[gt + 1] = 1
+                        tauw[0] -= qgammat
+                        if R[gt] < self.eps:  # 'R[gt]' wird negativ
+                            R[gt] = 0
+                            gamma = np.delete(gamma, -1)
+                            T.pop()
+                            lam = np.zeros(dim)
+                            q, r = np.linalg.qr(base)
+                            z = q.T[:, gt]
+                            lam[dim-1] = z[dim-1] / r[dim-1, dim-1]
+                            for ind in range(dim-2, -1, -1):
+                                lamrsum = 0
+                                for j in range(dim-1, ind, -1):
+                                    lamrsum += lam[j] * r[ind, j]
+                                lam[ind] = (z[ind] - lamrsum) / r[ind, ind]
+                            delt = 1/self.eps
+                            out = 1/self.eps
+                            for j in range(dim):
+                                if base_y[j] - lam[j] * delt < -self.eps:
+                                    delt = base_y[j] / lam[j]
+                                    out = j
+                            for j in range(dim):
+                                base_y[j] -= delt * lam[j]
+                            base_y[out] = delt
+                            if len(np.where(base[:, out] > self.eps)[0]) > 1:
+                                wt_next = base_v[:, out]
+                                base[:, out] = np.zeros(dim)
+                                base[gt, out] = 1
+                            else:
+                                mu_no -= 1
+                                qi = np.zeros(dim)
+                                i = np.where(base[:, out] > self.eps)[0][0]
+                                base[:, out] = np.zeros(dim)
+                                base[gt, out] = 1
+                                qi[i] = -1
+                                qi[i+1] = 1
+                                tauw.append(tauw[-1] + qi)
+                                wt_next = tauw[-1]
+                                T.append(i)
+                                gamma.append(i)
+                                t += 1
+                                break
+                        else:
+                            R[gt] -= 1
+                            del tauw[-1]
+                            tauw.append(tauw[0])
+                            del L[-1]
+                            L.append(lvt_next)
+                            break
+                    else:
+                        gs = gamma[out]
+                        gamma[out] = gamma[out-1]
+                        gamma[out-1] = gs
+                        qj = np.zeros(dim)
+                        qj[gamma[out]] = -1
+                        qj[gamma[out]+1] = 1
+                        tauw.append(tauw[out] + qj)
+                        del tauw[out]
+                        del L[out]
+                        L.append(lvt_next)
+                        break
+                # else:
+                #    tauw.append(wt_next)
+                #    L.append(lvt_next)
+                #    T.append(lvt_next)
+                #    gamma.append(lvt_next)
 
     def main(self):
         """
@@ -1098,7 +1201,8 @@ class ContAppMulti:
             A_2 = np.concatenate((A_2, np.zeros(self.I).reshape(self.I, 1)), axis=1)'''
             con = [A_1, b_1]
             all_iv_old = all_iv.copy()
-            x, all_iv = self.compute_fp(simplex, con, theta_ind)
+            # x, all_iv = self.compute_fp(simplex, con, theta_ind)
+            x = self.lt_algo(simplex, con, theta_ind)
             all_iv_old_keys = all_iv_old.keys()
             for (i, v_ind) in all_iv_old_keys:
                 delta_p = self.get_outgoing_edges(self.V[v_ind])
