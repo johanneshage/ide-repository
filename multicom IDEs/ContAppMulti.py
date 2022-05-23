@@ -676,7 +676,6 @@ class ContAppMulti:
                 start_node = fpk[-1]
             #start_node = np.zeros(dim)
             #start_node[-1] = 1
-            print("startnode", start_node)
             xc0 , pi_c = self.find_ancestor_simplex(k, start_node)
             Xc, f_Xc = self.fk_on_tk(xc0, pi_c, con, simplex, all_iv, theta_ind, cs_bz, k)
 
@@ -947,7 +946,7 @@ class ContAppMulti:
             base = np.eye(dim)
             base_v = np.zeros((dim, dim))
             base_y = np.ones(dim)
-            wt_next = v0
+            wt_next = v0 / k
             T = []
             gamma = []
             R = np.zeros(dim)
@@ -961,8 +960,8 @@ class ContAppMulti:
                     k += 1
                     break
                 # Im Fall 'part=[0]' ist 'pi' irrelevant
-                fvt_next = self.fk_on_tk(wt_next, [], con, simplex, all_iv, theta_ind, cs_bz, k, part=[0])[1]
-                lvt_next = fvt_next - wt_next.reshape((dim, 1)) + np.ones(dim).reshape((dim, 1))
+                fvt_next = self.fk_on_tk(k * wt_next, [], con, simplex, all_iv, theta_ind, cs_bz, k, part=[0])[1]
+                lvt_next = fvt_next - wt_next.reshape((dim, 1)) + 1/k * np.ones(dim).reshape((dim, 1))
                 # pivotiere lvt_next in base
                 q, r = np.linalg.qr(base)
                 z = q.T.dot(lvt_next)
@@ -983,9 +982,17 @@ class ContAppMulti:
                     base_y[j] -= delt * lam[j]
                 base_y[out] = delt
                 if len(np.where(base[:, out] > self.eps)[0]) > 1:
+                    wt_old = wt_next.copy()
                     wt_next = base_v[:, out]
+                    # ?
+                    print("out, ", out)
+                    m = 0
+                    for wi in range(t):
+                        if np.linalg.norm(wt_next - tauw[wi]) < self.eps:
+                            m = wi
+                            break
                     base[:, out] = lvt_next.reshape(dim)
-                    base_v[:, out] = wt_next
+                    base_v[:, out] = wt_old
                 else:
                     mu_no -= 1
                     qi = np.zeros(dim)
@@ -1004,7 +1011,8 @@ class ContAppMulti:
                 # if lvt_next in L:
                     # s = L.index(lvt_next)
                 while True:
-                    if out == 0:
+                    print("drin 2", m, t)
+                    if m == 0:
                         qgamma1 = np.zeros(dim)
                         qgamma1[gamma[0]] = -1
                         qgamma1[gamma[0]+1] = 1
@@ -1021,14 +1029,9 @@ class ContAppMulti:
                         del tauw[0]
                         del L[0]
                         L.append(lvt_next)
-                    elif out == t:
-                        qgammat = np.zeros(dim)
+                        break
+                    elif m == t:
                         gt = gamma[-1]
-                        gamma = np.delete(gamma, -1)
-                        gamma = np.insert(gamma, 0, gt)
-                        qgammat[gt] = -1
-                        qgammat[gt + 1] = 1
-                        tauw[0] -= qgammat
                         if R[gt] < self.eps:  # 'R[gt]' wird negativ
                             R[gt] = 0
                             gamma = np.delete(gamma, -1)
@@ -1070,6 +1073,12 @@ class ContAppMulti:
                                 t += 1
                                 break
                         else:
+                            qgammat = np.zeros(dim)
+                            gamma = np.delete(gamma, -1)
+                            gamma = np.insert(gamma, 0, gt)
+                            qgammat[gt] = -1
+                            qgammat[gt + 1] = 1
+                            tauw[0] -= qgammat
                             R[gt] -= 1
                             del tauw[-1]
                             tauw.append(tauw[0])
@@ -1077,15 +1086,15 @@ class ContAppMulti:
                             L.append(lvt_next)
                             break
                     else:
-                        gs = gamma[out]
-                        gamma[out] = gamma[out-1]
-                        gamma[out-1] = gs
+                        gs = gamma[m]
+                        gamma[m] = gamma[out-1]
+                        gamma[m-1] = gs
                         qj = np.zeros(dim)
-                        qj[gamma[out]] = -1
-                        qj[gamma[out]+1] = 1
-                        tauw.append(tauw[out] + qj)
-                        del tauw[out]
-                        del L[out]
+                        qj[gamma[m]] = -1
+                        qj[gamma[m]+1] = 1
+                        tauw.append(tauw[m] + qj)
+                        del tauw[m]
+                        del L[m]
                         L.append(lvt_next)
                         break
                 # else:
