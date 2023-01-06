@@ -23,21 +23,25 @@ def concatenate(T,Z):
         Knoten "b" (aus "D1) zu Knoten "a" (aus "D4") mit Kapazität und Reisedauer gleich 1.
     :return: graph: der zusammengefügte Graph als Dictionary
     """
-    if len(T) != len(Z):
+    len_T = len(T)
+    len_Z = len(Z)
+    if len_T != len_Z:
         raise TypeError('T und Z muessen die gleiche Laenge haben!')
     graph = {}
-    for i in range(len(T)):
-        knoten = list(T[i].keys())
-        for v in knoten:
+    for i in range(len_T):
+        ti_keys = list(T[i].keys())
+        for v in ti_keys:
             insert={}
-            for w in list(T[i][v].keys()):
+            tiv_keys = list(T[i][v].keys())
+            for w in tiv_keys:
                 insert['{}_{}'.format(w,i+1)] = T[i][v][w]
             # füge alle Knoten und Kanten der einzelnen Teilgraphen zu "graph" hinzu (Resultat noch nicht
             # zusammenhängend)
             graph['{}_{}'.format(v,i+1)] = insert
 
-    for dic in range(len(Z)):
-        for i in list(Z[dic].keys()):
+    for dic in range(len_Z):
+        z_d_keys = list(Z[dic].keys())
+        for i in z_d_keys:
             ziel = Z[dic][i]
             kanten = list(ziel.keys())
             for e in kanten:  # füge Kanten zwischen einzelnen Zusammenhangskomponenten ein
@@ -48,6 +52,8 @@ def concatenate(T,Z):
                 dazu.append('{}_{}'.format(start,dic+1))
                 ende = ""
                 for stelle in range(e.index(",") + 1,len(e)-1):
+                    if e[stelle] == " ":
+                        continue
                     ende += e[stelle]
                 dazu.append('{}_{}'.format(ende,i))
                 dazu.append(ziel[e])
@@ -56,7 +62,8 @@ def concatenate(T,Z):
     quellen_nummer = 0
     senken_nummer = 0
     # Quellen und Senken müssen nun auf die passende Form für "main"-Funktion umbenannt werden, also ohne "_"
-    for v in list(graph.keys()):
+    nodes = list(graph.keys())
+    for v in nodes:
         name = str(v)
         if "_" not in name:
             continue

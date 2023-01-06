@@ -5,8 +5,9 @@ import functools
 
 class OutputTableMulti(object):
 
-    def __init__(self, V, E, I, nu, fp, fp_ind, fm, q, phases, c, labels, vol):
+    def __init__(self, G, V, E, I, nu, fp, fp_ind, fm, q, phases, c, labels, vol):
 
+        self.G = G
         self.V = V  # Knotenmenge
         self.E = E  # Kantenmenge
         self.I = I  # Anzahl Güter
@@ -22,6 +23,7 @@ class OutputTableMulti(object):
         self.flow_vol = vol  # Flussvolumen zu jedem Zeitpunkt in den einzelnen Knoten
         self.table = tk.Tk()  # Ausgabetabelle
         self.menu = tk.Menu(self.table)  # Menüleiste
+        # self.menu.option_add('*tearOff', False)
         self.table.config(menu=self.menu)
         self.table.title("Zeit: 0")
         self.filemenuR = tk.Menu(self.menu)  # Menüpunkt Zeilen
@@ -30,21 +32,24 @@ class OutputTableMulti(object):
         self.menu.add_cascade(label="Spalten", menu=self.filemenuC)
 
         # Variablen der Checkboxen zu den Zeilengruppen
-        self.CheckVarAll = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen
-        self.CheckVarPosFlow = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positivem Flussvolumen im
-        # Startknoten der entsprechenden Kante
-        self.CheckVarPosQ = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positiver Warteschlangen-
-        # länge
-        self.CheckVarAll.set(True)
-        self.CheckVarPosFlow.set(True)
-        self.CheckVarPosQ.set(True)
+        # self.CheckVarAll = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen
+        # self.CheckVarPosFlow = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positivem Flussvolumen im Startknoten der entsprechenden Kante
+        # self.CheckVarPosQ = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positiver Warteschlangenlänge
+        # self.CheckVarAll.set(True)
+        # self.CheckVarPosFlow.set(True)
+        # self.CheckVarPosQ.set(True)
 
-        self.filemenuR.add_checkbutton(
-            label="alle", variable=self.CheckVarAll, command=self.check_all_rows)
-        self.filemenuR.add_checkbutton(label="Kanten mit positivem Flussvolumen im Startknoten",
-                                       variable=self.CheckVarPosFlow, command=self.check_pos_flow)
-        self.filemenuR.add_checkbutton(label="Kanten mit positiver Warteschlangenlänge",variable=self.CheckVarPosQ,
-                                       command=self.check_pos_q)
+        # self.filemenuR.add_checkbutton(label="alle", variable=self.CheckVarAll, command=self.check_all_rows)
+        # self.filemenuR.add_checkbutton(label="Kanten mit positivem Flussvolumen im Startknoten", variable=self.CheckVarPosFlow, command=self.check_pos_flow)
+        # self.filemenuR.add_checkbutton(label="Kanten mit positiver Warteschlangenlänge", variable=self.CheckVarPosQ, command=self.check_pos_q)
+
+        self.singles = tk.Menu(self.filemenuR)
+        self.filemenuR.add_cascade(label="Kanten mit Startknoten...", menu=self.singles)
+        self.CheckVarNodes = []
+        for (v_ind, v) in enumerate(self.V):
+            self.CheckVarNodes.append(tk.BooleanVar())
+            self.CheckVarNodes[v_ind].set(True)
+            self.singles.add_checkbutton(label="{}".format(v), variable=self.CheckVarNodes[v_ind], command=functools.partial(self.check_node, v_ind))
 
         # Variablen der Checkboxen zu den einzelnen Spalten
         self.CheckVarFp = tk.BooleanVar()  # wenn 'True', zeige Spalte 'f^+'
@@ -69,6 +74,7 @@ class OutputTableMulti(object):
         self.filemenuC.add_checkbutton(label="c zu Beginn", variable=self.CheckVarC, command=functools.partial(self.check_column, 6))
         self.filemenuC.add_checkbutton( label="label des Endknotens zu Beginn", variable=self.CheckVarLabel, command=functools.partial(self.check_column, 7))
         self.eps = 10**(-12)
+        self.bd_tol = 10**(-6)
         self.col_heads = ["Gut", "f^+", "f^-", "q zu Beginn", "Änderung q / nu", "c zu Beginn", "label des Endknotens \n zu Beginn"]
         self.cols = len(self.col_heads)
         self.single_cols = [4, 5, 6]
@@ -166,9 +172,12 @@ class OutputTableMulti(object):
         :param z: Einflussrate in Kante
         :return: Änderungsrate der Kosten
         """
+        dif = z - self.nu[e_ind]
+        if abs(dif) < self.bd_tol:
+            return 0
         if self.q[phase_ind][e_ind] > 0:
-            return (z - self.nu[e_ind])/self.nu[e_ind]
-        return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0])
+            return dif / self.nu[e_ind]
+        return np.max([dif / self.nu[e_ind], 0])
 
     def check_all_rows(self):
         """
@@ -277,6 +286,26 @@ class OutputTableMulti(object):
                         self.grid_entries[ro + 2, co].grid_remove()
         return
 
+    def check_node(self, v_ind):
+        """
+
+        :param v_ind:
+        :return:
+        """
+        non_hidden_cols = list(set(range(self.cols + 1)) - set(self.hidden_cols))
+        if self.CheckVarNodes[v_ind].get():
+            v = self.V[v_ind]
+            delta_p = [self.E.index((v,u)) for u in self.G[v].keys()]
+            for ro in delta_p:
+                for co in non_hidden_cols:
+                    self.grid_entries[ro + 2, co].grid()
+        else:
+            v = self.V[v_ind]
+            delta_p = [self.E.index((v,u)) for u in self.G[v].keys()]
+            for ro in delta_p:
+                for co in non_hidden_cols:
+                    self.grid_entries[ro + 2, co].grid_remove()
+
     def check_column(self, col_ind):
         """
         Wird aufgerufen bei Änderung des Status einer der Checkboxen im Menü 'Spalten'. Ist die Checkbox zur Spalte
@@ -355,12 +384,13 @@ class OutputTableMulti(object):
                     fp_frame[i].insert('end', self.fp[i][ro][ind][1])
 
                 fm_times = [t for (t, v) in self.fm[i][ro]]
-                if theta in fm_times:
+                fm_where = np.where([abs(theta - t) < self.eps for t in fm_times])[0]
+                for fm_ind in fm_where:
                     fm_entry = self.frame_entries[ro, self.multi_cols.index(3), i]
                     # fm_entry = self.grid_entries[grid_ro, 3][i]
                     fm_entry.config(state='normal')
                     fm_entry.delete(1.0, tk.END)
-                    fm_entry.insert('end', self.fm[i][ro][fm_times.index(theta)][1])
+                    fm_entry.insert('end', self.fm[i][ro][fm_ind][1])
 
             if fp_changed:
                 change = self.change_of_cost(ro, self.phase_ind, fp_sum)
@@ -384,7 +414,7 @@ class OutputTableMulti(object):
                 for i in range(self.I):
                     self.frame_entries[ro, multi_ind, i].config(state='disable')
 
-            self.check_all_rows()
+            # self.check_all_rows()
         return
 
     def previous(self):
@@ -428,18 +458,20 @@ class OutputTableMulti(object):
                     fp_frame[i].insert('end', self.fp[i][ro][ind][1])
 
                 fm_times = [t for (t, v) in self.fm[i][ro]]
-                if theta in fm_times:
+                fm_where = np.where([abs(theta - t) < self.eps for t in fm_times])[0]
+                fm_where_old = np.where([abs(old_theta - t) < self.eps for t in fm_times])[0]
+                for fm_ind in fm_where:
                     fm_entry = self.frame_entries[ro, self.multi_cols.index(3), i]
                     # fm_entry = self.grid_entries[grid_ro, 3][i]
                     fm_entry.config(state='normal')
                     fm_entry.delete(1.0, tk.END)
-                    fm_entry.insert('end', self.fm[i][ro][fm_times.index(theta)][1])
-                elif old_theta in fm_times:
+                    fm_entry.insert('end', self.fm[i][ro][fm_ind][1])
+                for fm_ind in fm_where_old:
                     fm_entry = self.frame_entries[ro, self.multi_cols.index(3), i]
                     # fm_entry = self.grid_entries[grid_ro, 3][i]
                     fm_entry.config(state='normal')
                     fm_entry.delete(1.0, tk.END)
-                    fm_entry.insert('end', self.fm[i][ro][fm_times.index(old_theta) - 1][1])
+                    fm_entry.insert('end', self.fm[i][ro][fm_ind - 1][1])
 
             if fp_changed:
                 q_delta.config(state='normal')
@@ -465,5 +497,5 @@ class OutputTableMulti(object):
             for co in range(len_multi_cols):
                 for i in range(self.I):
                     self.frame_entries[ro, co, i].config(state='disable')
-            self.check_all_rows()
+            # self.check_all_rows()
         return
