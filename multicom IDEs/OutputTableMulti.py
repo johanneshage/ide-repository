@@ -384,7 +384,7 @@ class OutputTableMulti(object):
                     fp_frame[i].insert('end', self.fp[i][ro][ind][1])
 
                 fm_times = [t for (t, v) in self.fm[i][ro]]
-                fm_where = np.where([abs(theta - t) < self.eps for t in fm_times])[0]
+                fm_where = np.where([0 <= theta - t < self.bd_tol * 10 and not (0 <= self.phases[self.phase_ind-1] - t < self.bd_tol * 10) for t in fm_times])[0]
                 for fm_ind in fm_where:
                     fm_entry = self.frame_entries[ro, self.multi_cols.index(3), i]
                     # fm_entry = self.grid_entries[grid_ro, 3][i]
@@ -458,8 +458,8 @@ class OutputTableMulti(object):
                     fp_frame[i].insert('end', self.fp[i][ro][ind][1])
 
                 fm_times = [t for (t, v) in self.fm[i][ro]]
-                fm_where = np.where([abs(theta - t) < self.eps for t in fm_times])[0]
-                fm_where_old = np.where([abs(old_theta - t) < self.eps for t in fm_times])[0]
+                fm_where = np.where([0 <= theta - t < self.bd_tol *10 and (self.phase_ind == 0 or not (0 <= self.phases[self.phase_ind-1] < self.bd_tol *10)) for t in fm_times])[0]
+                fm_where_old = np.where([0 < old_theta - t < self.bd_tol * 10 and not (0 <= theta - t < self.bd_tol * 10) for t in fm_times])[0]
                 for fm_ind in fm_where:
                     fm_entry = self.frame_entries[ro, self.multi_cols.index(3), i]
                     # fm_entry = self.grid_entries[grid_ro, 3][i]
