@@ -1,12 +1,13 @@
 import numpy as np
-from OutputTableMulti import OutputTableMulti
 from scipy.sparse.linalg import spsolve
-from scipy.optimize import linprog
-import scipy
+from OutputTableMulti import OutputTableMulti
+import scipy.sparse
 import copy
-import itertools
 from collections import defaultdict
 import time
+import pickle
+import matplotlib.pyplot  as  plt
+import os
 
 
 class ContAppMulti:
@@ -41,8 +42,8 @@ class ContAppMulti:
         self.keys = G.keys()
         self.eps = 10**(-12)  # Für Rundungsfehler
         # self.eps = 10**(-5)
-        self.bd_tol = 10**(-6)
-        self.flow_vol = []  # merke Flusswerte in den einzelnen Knoten für OutputTable
+        self.bd_tol = 10**(-7)
+        self.flow_vol = []  # merke Flusswerte in den einzelnen Knoten für OutputTable # NUR FÜR OutputTable BENÖTIGT UND KOSTET SPEICHER
         self.delta_p = []
 
         for delta in self.items:
@@ -52,10 +53,10 @@ class ContAppMulti:
                 self.nu.append(list(self.items)[list(self.keys).index(delta[0])][1][w][0])  # Kapazitäten in nu
         self.m = len(self.E)  # Anz. Kanten
         self.global_phase = [0]  # speichere Startzeitpunkte der "globalen" Phasen, also alle Zeitpunkte, zu denen sich mindestens eine lokale Phase ändert
-        self.q_global = [self.m * [0]]  # speichere für jede globale Phase alle momentanen Warteschlangenlängen zu Beginn der Phase
+        self.q_global = [scipy.sparse.csr_matrix(np.zeros(self.m))]  # speichere für jede globale Phase alle momentanen Warteschlangenlängen zu Beginn der Phase
 
         self.fp = [[] for _ in range(self.I)]  # f^+    [[],[]]
-        self.fp_ind = [[] for _ in range(self.I)]  # Liste der Indizes der Phasen
+        self.fp_ind = [[] for _ in range(self.I)]  # Liste der Indizes der Phasen # NUR FÜR OutputTable BENÖTIGT UND KOSTET SPEICHER
         self.fm = [[] for _ in range(self.I)]  # f^-
         for i in range(self.I):
             for k in range(self.m):
@@ -284,7 +285,7 @@ class ContAppMulti:
         # setze 'beta' - Werte
         for i in range(pk):
             e_ind = self.E.index((v, outneighbors[i]))
-            if self.q_global[-1][e_ind] > 0:
+            if self.q_global[-1][0, e_ind] > 0:
                 beta[i] -= 1
             old_sorting[i] += i
 
@@ -299,7 +300,7 @@ class ContAppMulti:
         for i in range(pk):
             e_ind = self.E.index((v, outneighbors[i]))
             alpha[i] += self.nu[e_ind] * flow_ratio
-            if self.q_global[-1][e_ind] == 0:
+            if self.q_global[-1][0, e_ind] == 0:
                 gamma[i] += self.nu[e_ind] * flow_ratio
 
         # h = lambda i, z: beta[i] + np.max([0, 1.0/alpha[i] * (z - gamma[i])])
@@ -431,9 +432,12 @@ class ContAppMulti:
         :param z: Einflussrate in Kante 'e'
         :return: Änderungsrate der Kosten
         """
-        if self.q_global[phase_ind][e_ind] > self.eps:
-            return (z - self.nu[e_ind])/self.nu[e_ind]
-        return np.max([(z - self.nu[e_ind])/self.nu[e_ind], 0])
+        dif = z - self.nu[e_ind]
+        if abs(dif) < self.bd_tol * self.I:
+            return 0
+        if self.q_global[phase_ind][0, e_ind] > self.eps:
+            return dif / self.nu[e_ind]
+        return np.max([dif / self.nu[e_ind], 0])
 
     def last_fm_change(self, i, e_ind, theta):
         """
@@ -458,9 +462,9 @@ class ContAppMulti:
         :return: momentane Änderungsrate der Warteschlange
         """
         dif = x - self.nu[e_ind]
-        # if abs(dif) < self.bd_tol:
-        #     return 0
-        if self.q_global[theta_ind][e_ind] > self.eps:
+        if abs(dif) < self.I * self.bd_tol:
+            return 0
+        if self.q_global[theta_ind][0, e_ind] > self.eps:
             return dif
         return max([dif, 0])
 
@@ -526,7 +530,7 @@ class ContAppMulti:
         coms = defaultdict(list)
         coms_lens = np.zeros(self.n)
         self.b.append(scipy.sparse.lil_matrix((self.I, self.n)))
-        self.flow_vol.append(scipy.sparse.lil_matrix((self.n, 1)))
+        self.flow_vol.append(scipy.sparse.lil_matrix((self.n, 1))) # NUR FÜR OutputTable BENÖTIGT UND KOSTET SPEICHER
 
         def calc_flow_by_bounds(xk_old=None):
             """
@@ -667,6 +671,12 @@ class ContAppMulti:
                 2.:
             :return:
             """
+            x_sum_nm = np.zeros(self.m)
+            for v_ind in coms:
+                for i in coms[v_ind]:
+                    arg = list(set(delta_p_act[i][v_ind]) - set(argmin[i][v_ind]))
+                    for e_ind in arg:
+                        x_sum_nm[e_ind] += xk[i, e_ind]
             for i in range(self.I):
                 for v_ind in top_ords[i]:
                     if v_ind in coms and i in coms[v_ind]:
@@ -675,15 +685,16 @@ class ContAppMulti:
                         if not arg_nf:
                             # In diesem Fall sind alle aktiven nichtminimalen Kanten bereits fixiert. Damit können keine Fortschritte mehr gemacht werden -> relaxiere bds
                             for e_ind in arg:
-                                if xk[i, e_ind] < self.bd_tol:
+                                if xk[i, e_ind] < self.bd_tol * (np.max([1, coms_lens[v_ind]]) + self.I+1):
                                     continue
                                 w_ind = self.V.index(self.E[e_ind][1])
-                                if self.q_global[-1][e_ind] < self.eps:
+                                if self.q_global[-1][0, e_ind] < self.eps:
                                     # Falls q = 0 -> g_e nicht-negativ -> kleinster a-Wert kann nicht erreicht werden -> wähle kleinstmögliche untere Schranke: 0
                                     bounds[v_ind][i][e_ind] = (0, xk[i, e_ind])
                                 else:
                                     # relaxiere untere Schranke, sodass der minimale a-Wert erreicht werden kann
-                                    bounds[v_ind][i][e_ind] = ((1 + a[i, v_ind] - a[i, w_ind]) * self.nu[e_ind], xk[i, e_ind])
+                                    # bounds[v_ind][i][e_ind] = ((1 + a[i, v_ind] - a[i, w_ind]) * self.nu[e_ind], xk[i, e_ind])
+                                    bounds[v_ind][i][e_ind] = (bounds[v_ind][i][e_ind][0] - (x_sum[e_ind] + x_sum_fix[e_ind] - (1 + a[i, v_ind] - a[i, w_ind]) * self.nu[e_ind]) * xk[i, e_ind] / x_sum_nm[e_ind], xk[i, e_ind])
                                 bounds_f[v_ind][i].remove(e_ind)
                                 delta_p_act_nf[i][v_ind].append(e_ind)
                                 b_nf[i, v_ind] += xk[i, e_ind]
@@ -695,7 +706,7 @@ class ContAppMulti:
                                 w_ind = self.V.index(self.E[e_ind][1])
                                 xe = x_sum[e_ind] + x_sum_fix[e_ind]
                                 x2 = (a_min2[i, v_ind] - a[i, w_ind]) * self.nu[e_ind] - self.g(e_ind, theta_ind, xe)
-                                if self.q_global[-1][e_ind] < self.eps and xe < self.nu[e_ind] - self.eps:
+                                if self.q_global[-1][0, e_ind] < self.eps and xe < self.nu[e_ind] - self.eps:
                                     x2 += self.nu[e_ind] - xe
                                 bounds_f[v_ind][i].remove(e_ind)
                                 delta_p_act_nf[i][v_ind].append(e_ind)
@@ -718,9 +729,11 @@ class ContAppMulti:
                     outneighbors = list(set(np.concatenate([[self.V.index(self.E[e_ind][1]) for e_ind in argmin_nf[i][v_ind]] for i in coms[v_ind]])))
                     # sind zusätzlich für alle Endknoten 'w_ind' die Flussaufteilungen bereits fixiert, kann auch die Aufteilung in Knoten 'v_ind' fixiert werden
                     if np.all([w_ind not in coms for w_ind in outneighbors]):
+                        if v_ind == 0 and theta_ind == 0:
+                            continue
                         for i in coms[v_ind]:
                             for e_ind in delta_p_act[i][v_ind]:
-                                if xk[i, e_ind] < self.bd_tol:
+                                if xk[i, e_ind] < self.bd_tol * (np.max([1, coms_lens[v_ind]]) + self.I+1):
                                     xfp[i, e_ind] = 0
                                 else:
                                     xfp[i, e_ind] = xk[i, e_ind]
@@ -797,7 +810,7 @@ class ContAppMulti:
                 if np.all([w_ind not in coms for w_ind in outneighbors]):
                     for i in coms[v_ind]:
                         for e_ind in delta_p_act[i][v_ind]:
-                            if xk[i, e_ind] < self.bd_tol:
+                            if xk[i, e_ind] < self.bd_tol* (np.max([1, coms_lens[v_ind]]) + self.I+1):
                                 xfp[i, e_ind] = 0
                             else:
                                 xfp[i, e_ind] = xk[i, e_ind]
@@ -826,7 +839,7 @@ class ContAppMulti:
             for (i, v_ind) in fp_comp:
                 for e_ind in bounds[v_ind][i]:
                     xfp[i, e_ind] = (bounds[v_ind][i][e_ind][0] + bounds[v_ind][i][e_ind][1]) * 0.5
-                    if xfp[i, e_ind] < self.bd_tol:
+                    if xfp[i, e_ind] < self.bd_tol * (np.max([1, coms_lens[v_ind]]) + self.I+1):
                         xfp[i, e_ind] = 0
                     else:
                         x_sum_fix[e_ind] += xfp[i, e_ind]
@@ -852,7 +865,8 @@ class ContAppMulti:
                 return xfp, x_sum_fix, a, top_ords, coms_lens
 
             while True:
-                print("theta_ind", theta_ind, "thta", theta)
+                # print("theta_ind", theta_ind, "thta", theta)
+                # ??? 'gx' redundant ???
                 gx, forced_zeros = self.gamma(xk + xfp, x_sum + x_sum_fix, a, delta_p_act_nf, coms, theta_ind)
                 # lil_matrix wird beim Rechnen automatisch in csr Matrix umgewandelt!?
                 # if scipy.sparse.linalg.norm(gx.tocsr() - xk.tocsr()) < self.bd_tol:
@@ -870,11 +884,41 @@ class ContAppMulti:
                     sol = xfp + xk
                     sparse_items = self.get_items(xk)
                     for (i, e_ind) in sparse_items:
-                        if xk[i, e_ind] < self.bd_tol:
+                        if xk[i, e_ind] < self.bd_tol * (np.max([1, coms_lens[v_ind]]) + self.I+1):
                             x_sum[e_ind] -= xk[i, e_ind]
                             sol[i, e_ind] -= xk[i, e_ind]
                     return sol, x_sum + x_sum_fix, a, top_ords, coms_lens
 
+                ide_err = {}
+                ide_delta_err = {}
+                for v_ind in coms:
+                    ide_err[v_ind] = {}
+                    ide_delta_err[v_ind] = {}
+                    for i in coms[v_ind]:
+                        max_cost = -np.Inf
+                        min_cost = np.Inf
+                        maxes = []
+                        mins = []
+                        for e in delta_p_act[i][v_ind]:
+                            w = self.V.index(self.E[e][1])
+                            if self.labels[i][theta_ind][w] + self.c[theta_ind][e] < min_cost:
+                                min_cost = self.labels[i][theta_ind][w] + self.c[theta_ind][e]
+                                mins = [e]
+                            elif self.labels[i][theta_ind][w] + self.c[theta_ind][e] == min_cost:
+                                mins.append(e)
+                            if self.labels[i][theta_ind][w] + self.c[theta_ind][e] > max_cost:
+                                max_cost = self.labels[i][theta_ind][w] + self.c[theta_ind][e]
+                                maxes = [e]
+                            elif self.labels[i][theta_ind][w] + self.c[theta_ind][e] == max_cost:
+                                maxes.append(e)
+                        ide_err[v_ind][i] = max_cost - min_cost
+                        ide_delta_err[v_ind][i] = [[], []]
+                        for e in mins:
+                            w = self.V.index(self.E[e][1])
+                            ide_delta_err[v_ind][i][0].append(a[i, w] + self.g(e, theta_ind, x_sum[e] + x_sum_fix[e]))
+                        for e in maxes:
+                            w = self.V.index(self.E[e][1])
+                            ide_delta_err[v_ind][i][1].append(a[i, w] + self.g(e, theta_ind, x_sum[e] + x_sum_fix[e]))
                 fp_comp = []
                 for v_ind in coms:
                     coms_len = len(coms[v_ind])  # beachtet Löschen der bereits fixierten Güter (anders als 'coms_lens[v_ind]')
@@ -900,6 +944,7 @@ class ContAppMulti:
                             # Anpassung der bounds nicht notwendig
                             continue
                         for e_ind in argmin_nf[i][v_ind]:
+
                             if e_ind in bounds[v_ind][i]:
                                 bounds[v_ind][i][e_ind] = (xk[i, e_ind], bounds[v_ind][i][e_ind][1])
                             else:
@@ -941,10 +986,9 @@ class ContAppMulti:
         theta = 0
         theta_ind = -1
         # Obergrenze für theta
-        T = 29
+        T = 70
         # stop_outflow = []
-        # simplex = [[], [], []]
-        # all_iv = {}
+        #s_err = [[], [], []]
         while theta < T:
             # in der Zukunft liegende Zeitpunkte aus der Liste 'self.u_start'
             start_points = [t for t in self.u_start if t > theta]
@@ -961,6 +1005,23 @@ class ContAppMulti:
             else:
                 next_phase = [T]
             x_total, x_sum, a, top_ords, coms_lens = self.fp_approx(theta_ind)
+
+            #for i in range(self.I):
+            #    delta_p_s_act = self.get_outgoing_active_edges(i, 0)
+            #    smax = -np.Inf
+            #    smin = np.Inf
+            #    for e_ind in delta_p_s_act:
+            #        w_ind = self.V.index(self.E[e_ind][1])
+            #        val = a[0, w_ind] + self.g(e_ind, theta_ind, x_sum[e_ind]) / self.nu[e_ind]
+            #        if x_total[0, e_ind] > 0:
+            #            if val > smax:
+            #                smax = val
+            #            if val < smin:
+            #                smin = val
+            #    if smin < 100000:
+            #        s_err[i].append((theta_ind, smax - smin))
+            #    else:
+            #        s_err[i].append((theta_ind, 0))
 
             for ti in range(self.I):
                 for v_ind in top_ords[ti]:
@@ -980,8 +1041,8 @@ class ContAppMulti:
                             flow_ratio = x_total[ti, e_ind] / x_sum[e_ind]
                         else:
                             flow_ratio = 0
-                        if self.q_global[theta_ind][e_ind] > self.eps:
-                            outflow_time = theta + self.q_global[theta_ind][e_ind]/self.nu[e_ind] + self.r[e_ind]
+                        if self.q_global[theta_ind][0, e_ind] > self.eps:
+                            outflow_time = theta + self.q_global[theta_ind][0, e_ind]/self.nu[e_ind] + self.r[e_ind]
                             outflow = self.nu[e_ind] * flow_ratio
                         else:
                             outflow_time = theta + self.r[e_ind]
@@ -992,8 +1053,10 @@ class ContAppMulti:
                         fm_ind = self.last_fm_change(ti, e_ind, outflow_time)
                         # falls sich f_{ti}^- -Wert durch die Flussaufteilung in dieser Phase ändert, aktualisiere 'self.fm'
                         if abs(self.fm[ti][e_ind][fm_ind][1] - outflow) > self.bd_tol:
-                            self.fm[ti][e_ind].append((outflow_time, outflow))
-
+                            if abs(self.fm[ti][e_ind][fm_ind][0] - outflow_time) < self.eps:
+                                del self.fm[ti][e_ind][fm_ind]
+                            else:
+                                self.fm[ti][e_ind].append((outflow_time, outflow))
             for ti in range(self.I):
                 # überspringen jeweilige Senke, da diese hier uninteressant
                 for v_ind in top_ords[ti][1:]:
@@ -1003,13 +1066,13 @@ class ContAppMulti:
                     for e_ind in active_paths:
                         last_fm_ind = self.last_fm_change(ti, e_ind, theta)
                         # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
-                        if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and self.eps < self.fm[ti][e_ind][last_fm_ind + 1][0] - theta < next_phase[0] + 1 * self.bd_tol * self.I:
+                        if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and self.eps < self.fm[ti][e_ind][last_fm_ind + 1][0] - theta < next_phase[0] + 2 * self.bd_tol * self.I:
                             next_fm = self.fm[ti][e_ind][last_fm_ind + 1][0] - theta
                             if next_fm < next_phase[0]:
                                 nph_rev = copy.deepcopy(next_phase)
                                 nph_rev.reverse()
                                 for p in nph_rev:
-                                    if p > next_fm + 1 * self.bd_tol * self.I:
+                                    if p > next_fm + 2 * self.bd_tol * self.I:
                                         next_phase.pop()
                                         if p in fm_to_zero:
                                             # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
@@ -1029,8 +1092,8 @@ class ContAppMulti:
                         if abs(self.fp[ti][e_ind][-1][1]) > self.eps:
                             self.fp[ti][e_ind].append((theta, 0))
                             self.fp_ind[ti][e_ind].append(theta_ind)
-                            if self.q_global[theta_ind][e_ind] > self.eps:
-                                outflow_time = theta + self.q_global[theta_ind][e_ind]/self.nu[e_ind] + self.r[e_ind]
+                            if self.q_global[theta_ind][0, e_ind] > self.eps:
+                                outflow_time = theta + self.q_global[theta_ind][0, e_ind]/self.nu[e_ind] + self.r[e_ind]
                             else:
                                 outflow_time = theta + self.r[e_ind]
                             fm_ind = self.last_fm_change(ti, e_ind, outflow_time)
@@ -1040,13 +1103,13 @@ class ContAppMulti:
 
                         # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
                         last_fm_ind = self.last_fm_change(ti, e_ind, theta)
-                        if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and self.eps < self.fm[ti][e_ind][last_fm_ind + 1][0] - theta < next_phase[0] + 1 * self.bd_tol * self.I:
+                        if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and self.eps < self.fm[ti][e_ind][last_fm_ind + 1][0] - theta < next_phase[0] + 2 * self.bd_tol * self.I:
                             next_fm = self.fm[ti][e_ind][last_fm_ind + 1][0] - theta
                             if next_fm < next_phase[0]:
                                 nph_rev = copy.deepcopy(next_phase)
                                 nph_rev.reverse()
                                 for p in nph_rev:
-                                    if p > next_fm + 1 * self.bd_tol * self.I:
+                                    if p > next_fm + 2 * self.bd_tol * self.I:
                                         next_phase.pop()
                                         if p in fm_to_zero:
                                             # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
@@ -1069,39 +1132,40 @@ class ContAppMulti:
                             # Änderung der Kosten dieser Kante
                             active_change = self.change_of_cost(active_ind, theta_ind, x_sum[active_ind])
                             break
+                    if len_act:
+                        for e_ind in inactive_paths:
+                            change = self.change_of_cost(e_ind, theta_ind, x_sum[e_ind])
+                            # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
+                            tar_ind = self.V.index(self.E[e_ind][1])
+                            act_ind = self.V.index(self.E[active_ind][1])
+                            if self.labels[ti][theta_ind][tar_ind] + self.q_global[-1][0, e_ind]/self.nu[e_ind] + self.r[e_ind] + \
+                                    (change + a[ti, tar_ind]) * (next_phase[0] + 2 * self.bd_tol * self.I) < \
+                                    self.labels[ti][theta_ind][act_ind] + self.q_global[-1][0, active_ind]/self.nu[active_ind] + \
+                                    self.r[active_ind] + (active_change + a[ti, act_ind]) * (next_phase[0] + 2 * self.bd_tol * self.I) and \
+                                    abs(change + a[ti, tar_ind] - active_change - a[ti, act_ind]) \
+                                    > self.eps:
+                                time_ub = (self.labels[ti][theta_ind][act_ind] + self.q_global[-1][0, active_ind]/self.nu[active_ind] + self.r[active_ind] - \
+                                          self.labels[ti][theta_ind][tar_ind] - self.q_global[-1][0, e_ind]/self.nu[e_ind] - self.r[e_ind]) \
+                                          / (change + a[ti, tar_ind] - active_change - a[ti, act_ind])
 
-                    for e_ind in inactive_paths:
-                        change = self.change_of_cost(e_ind, theta_ind, x_sum[e_ind])
-                        # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
-                        tar_ind = self.V.index(self.E[e_ind][1])
-                        act_ind = self.V.index(self.E[active_ind][1])
-                        if self.labels[ti][theta_ind][tar_ind] + self.q_global[-1][e_ind]/self.nu[e_ind] + self.r[e_ind] + \
-                                (change + a[ti, tar_ind]) * (next_phase[0] + 1 * self.bd_tol * self.I) < \
-                                self.labels[ti][theta_ind][act_ind] + self.q_global[-1][active_ind]/self.nu[active_ind] + \
-                                self.r[active_ind] + (active_change + a[ti, act_ind]) * (next_phase[0] + 1 * self.bd_tol * self.I) and \
-                                abs(change + a[ti, tar_ind] - active_change - a[ti, act_ind]) \
-                                > self.eps:
-                            time_ub = (self.labels[ti][theta_ind][act_ind] + self.q_global[-1][active_ind]/self.nu[active_ind] + self.r[active_ind] - \
-                                      self.labels[ti][theta_ind][tar_ind] - self.q_global[-1][e_ind]/self.nu[e_ind] - self.r[e_ind]) \
-                                      / (change + a[ti, tar_ind] - active_change - a[ti, act_ind])
-                            if time_ub < next_phase[0]:
-                                nph_rev = copy.deepcopy(next_phase)
-                                nph_rev.reverse()
-                                for p in nph_rev:
-                                    if p > time_ub + 1 * self.bd_tol * self.I:
-                                        next_phase.pop()
-                                        if p in fm_to_zero:
-                                            # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
-                                            del fm_to_zero[p]
-                                    else:
-                                        break
-                                next_phase.insert(0, time_ub)
-                            else:
-                                last_ind = len(next_phase) - 1
-                                for p in range(last_ind, -1, -1):
-                                    if time_ub > next_phase[p]:
-                                        next_phase.insert(p+1, time_ub)
-                                        break
+                                if time_ub < next_phase[0]:
+                                    nph_rev = copy.deepcopy(next_phase)
+                                    nph_rev.reverse()
+                                    for p in nph_rev:
+                                        if p > time_ub + 2 * self.bd_tol * self.I:
+                                            next_phase.pop()
+                                            if p in fm_to_zero:
+                                                # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
+                                                del fm_to_zero[p]
+                                        else:
+                                            break
+                                    next_phase.insert(0, time_ub)
+                                else:
+                                    last_ind = len(next_phase) - 1
+                                    for p in range(last_ind, -1, -1):
+                                        if time_ub > next_phase[p]:
+                                            next_phase.insert(p+1, time_ub)
+                                            break
 
             for e_ind in range(self.m):
                 change_of_q = self.change_of_cost(e_ind, theta_ind, x_sum[e_ind]) * self.nu[e_ind]
@@ -1109,13 +1173,13 @@ class ContAppMulti:
                 # Fluss)
                 if change_of_q < -self.eps:
                     # 'phase_length': Dauer bis Warteschlangenlänge gleich 0
-                    phase_length = - self.q_global[theta_ind][e_ind] / change_of_q
-                    if phase_length < next_phase[0] + 1 * self.bd_tol * self.I:
+                    phase_length = - self.q_global[theta_ind][0, e_ind] / change_of_q
+                    if phase_length < next_phase[0] + 2 * self.bd_tol * self.I:
                         if phase_length < next_phase[0]:
                             nph_rev = copy.deepcopy(next_phase)
                             nph_rev.reverse()
                             for p in nph_rev:
-                                if p > phase_length + 1 * self.bd_tol * self.I:
+                                if p > phase_length + 2 * self.bd_tol * self.I:
                                     next_phase.pop()
                                     if p in fm_to_zero:
                                         # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
@@ -1144,24 +1208,30 @@ class ContAppMulti:
                 new_q_global = []
                 self.c.append(np.zeros(self.m))
                 for e_ind in range(self.m):
-                    next_q_len = self.q_global[theta_ind][e_ind] + self.g(e_ind, theta_ind, x_sum[e_ind]) * next_phase[-1]
-                    if next_q_len < self.eps:
+                    next_q_len = self.q_global[theta_ind][0, e_ind] + self.g(e_ind, theta_ind, x_sum[e_ind]) * next_phase[-1]
+                    #if next_q_len < next_phase[-1] * self.bd_tol * self.I:
+                    if next_q_len < 2 * self.bd_tol * self.I:
                         next_q_len = 0
                     new_q_global.append(next_q_len)
                     self.c[-1][e_ind] = new_q_global[-1] / self.nu[e_ind] + self.r[e_ind]
                 # speichere aktuelle Warteschlangenlängen
-                self.q_global.append(new_q_global)
+                self.q_global.append(scipy.sparse.csr_matrix(new_q_global))
 
                 # speichere Phase
                 self.global_phase.append(theta)
                 self.E_active = scipy.sparse.lil_matrix((self.I, self.m))
-                flow_err = self.I * self.bd_tol * next_phase[-1]
-                np_dif = next_phase[-1] - next_phase[0]
+                # flow_err = self.I * self.bd_tol * next_phase[-1]
+                # np_dif = next_phase[-1] - next_phase[0]
+                qi = []
+                for e_ind in range(self.m):
+                    qi.append({})
                 for i in range(self.I):
                     self.labels[i].append([])
                     for v_ind in range(self.n):
                         self.labels[i][-1].append(self.labels[i][-2][v_ind] + next_phase[-1] * a[i, v_ind])
                     for v_ind in top_ords[i][1:]:
+                        if np.isinf(self.labels[i][-1][v_ind]):
+                            continue
                         v = self.V[v_ind]
                         outneighbors = self.G[v].keys()
                         dv_act = []
@@ -1169,6 +1239,12 @@ class ContAppMulti:
                             w_ind = self.V.index(w)
                             edge = self.E.index((v, w))
                             label_dif = self.labels[i][-1][v_ind] - self.labels[i][-1][w_ind] - self.c[-1][edge]
+                            """if label_dif > 0:
+                                self.E_active[i, edge] = 1
+                                self.labels[i][-1][v_ind] = (self.labels[i][-1][v_ind] * dv_act + self.labels[i][-1][w_ind] + self.c[-1][edge]) / (dv_act + 1)
+                                dv_act += 1
+                            elif abs(label_dif) < self.bd_tol * (np.max([1, coms_lens[v_ind]]) + self.I + 1):
+                            """
                             # if label_dif > 0 or abs(label_dif) < 1 * self.bd_tol * (np.max([1, coms_lens[v_ind]]) + self.I):
                             if label_dif > 0:
                                 # geschieht nur aufgrund von Approximationsfehler, für Kanten die aktiv sein sollten
@@ -1185,7 +1261,36 @@ class ContAppMulti:
                             e = self.E[dv_act[0]]
                             w_ind = self.V.index(e[1])
                             self.labels[i][-1][v_ind] = self.labels[i][-1][w_ind] + self.c[-1][dv_act[0]]
-                        # ??? else Fall für len('dv_act') > 1 ? -> Anpassung durch Mittelwert!?
+                            qi[dv_act[0]][i] = self.q_global[-1][0, dv_act[0]]
+                        else:
+                            l_sum = 0
+                            for e_ind in dv_act:
+                                w_ind = self.V.index(self.E[e_ind][1])
+                                l_sum += self.labels[i][-1][w_ind] + self.c[-1][e_ind]
+                            # dif = abs(self.labels[i][-1][v_ind] - l_sum / len(dv_act))
+                            self.labels[i][-1][v_ind] = l_sum / len(dv_act)
+                            for e_ind in dv_act:
+                                w_ind = self.V.index(self.E[e_ind][1])
+                                qi[e_ind][i] = (self.labels[i][-1][v_ind] - self.labels[i][-1][w_ind] - self.r[e_ind]) * self.nu[e_ind]
+                                # if qi[e_ind][i] < self.bd_tol * self.I * next_phase[-1]:
+                                if qi[e_ind][i] < 2 * self.I * self.bd_tol:
+                                    qi[e_ind][i] = 0
+                            #    """if new_q > dif + self.bd_tol * self.I:
+                            #        self.q_global[-1][0, e_ind] = new_q
+                            #        self.c[-1][e_ind] = self.q_global[-1][0, e_ind] / self.nu[e_ind] + self.r[e_ind]"""
+
+                for e_ind in range(self.m):
+                    len_qie = len(qi[e_ind])
+                    if len_qie > 1:
+                        mean_qi = 0
+                        for i in qi[e_ind]:
+                            mean_qi += qi[e_ind][i]
+                        mean_qi /= len_qie
+                        # if mean_qi > next_phase[-1] * self.bd_tol * self.I:
+                        if mean_qi > 2 * self.bd_tol * self.I:
+                            self.q_global[-1][0, e_ind] = mean_qi
+                            self.c[-1][e_ind] = self.q_global[-1][0, e_ind] / self.nu[e_ind] + self.r[e_ind]
+
                 for p in fm_to_zero:
                     for e_ind in fm_to_zero[p]:
                         for i in range(self.I):
@@ -1194,17 +1299,32 @@ class ContAppMulti:
                         # ??? Zeitpunkt richtig? nicht doppelt?
                         # stop_outflow.append(theta + self.r[e_ind])
 
-        for i in range(self.I):
+        """for i in range(self.I):
             # am Ende sind alle f^+ -Werte 0
             for e in range(self.m):
                 if abs(self.fp[i][e][-1][1]) > self.eps:
                     self.fp[i][e].append((theta - next_phase[-1], 0))
-                    self.fp_ind[i][e].append(theta_ind)
+                    self.fp_ind[i][e].append(theta_ind)"""
 
+        #s_times0 = [t for (t, v) in s_err[0]]
+        #s_vals0 = [v for (t, v) in s_err[0]]
+        #plt.plot(s_times0, s_vals0, 'r--')
+        """s_times1 = [t for (t, v) in s_err[1]]
+        s_vals1 = [v for (t, v) in s_err[1]]
+        plt.plot(s_times1, s_vals1, 'b--')
+        s_times2 = [t for (t, v) in s_err[2]]
+        s_vals2 = [v for (t, v) in s_err[2]]
+        plt.plot(s_times2, s_vals2, 'g--')"""
+        #plt.xlabel("Phase")
+        #plt.ylabel("Fehler")
+        #plt.xlim(0, 10)
+        #plt.ylim(0, self.bd_tol * 10)
+        #plt.show()
         # erzeuge Ausgabe
-        # OutputTableMulti(self.G, self.V, self.E, self.I, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase, self.c, self.labels, self.flow_vol)
+        fpp = self.fp
+        # OutputTableMulti(self.G, self.V, self.E, self.I, self.nu, self.fp, self.fp_ind, self.fm, self.q_global, self.global_phase, self.c, self.labels, self.flow_vol, self.bd_tol)
         # 2. A+0 in B2 von C'
-        fp38 = self.fp[1][1638]
+        """fp38 = self.fp[1][1638]
         fm38 = self.fm[1][1638]
         #q38 = self.q_global[:][1638]
 
@@ -1295,9 +1415,867 @@ class ContAppMulti:
         fm04 = self.fm[0][1604]
 
         fp07 = self.fp[0][1607]
-        fm07 = self.fm[0][1607]
+        fm07 = self.fm[0][1607]"""
 
         end_time = time.time()
         timediff1 = end_time - self.time_vor_main
         timediff2 = end_time - self.start_time
+
+        """with open('no_term200-6.txt', 'wb') as f:
+            pickle.dump(self.fp, f)
+            f.close()
+        with open('no_term200-6.txt', 'ab') as f:
+            pickle.dump(self.fm, f)
+            pickle.dump(self.q_global, f)
+            pickle.dump(self.global_phase, f)
+            f.close()"""
+
+        """output_txt.write('\n f^+:')
+        for i in range(self.I):
+            for e_ind in range(self.m):
+                # output_txt.write('\n ({0}, {1}): '.format(i, e_ind))
+                output_txt.write('\n')
+                for val in self.fp[i][e_ind]:
+                    output_txt.write('{0}; '.format(val))
+
+        output_txt.write('\n f^-:')
+        for i in range(self.I):
+            for e_ind in range(self.m):
+                # output_txt.write('\n ({0}, {1}): '.format(i, e_ind))
+                output_txt.write('\n')
+                for val in self.fm[i][e_ind]:
+                    output_txt.write('{0}; '.format(val))
+
+        output_txt.write('\n q:')
+        q_len = len(self.q_global)
+        for e_ind in range(self.m):
+            q_val = 0
+            # output_txt.write('\n {0}: '.format(e_ind))
+            output_txt.write('\n')
+            for t in range(q_len):
+                if self.q_global[t][e_ind] != q_val:
+                    q_val = self.q_global[t][e_ind]
+                    output_txt.write('({0}, {1}); '.format(self.global_phase[t], q_val))"""
+
+        output_json = open("output-flow2.json", "w")
+        output_json.write('{"network": {\n "nodes": [')
+        output_json.close()
+        output_json = open("output-flow2.json", "a")
+        for v_ind in range(self.n):
+            output_json.write(' {{"id": {0}, "x": {1}, "y": 0.0}},'.format(v_ind, 0.0 + v_ind))
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        output_json.write('], \n "edges": [')
+        for e_ind in range(self.m):
+            v_ind = self.V.index(self.E[e_ind][0])
+            w_ind = self.V.index(self.E[e_ind][1])
+            output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }},'.format(e_ind, v_ind, w_ind, self.nu[e_ind], self.r[e_ind]))
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        output_json.write('], \n "commodities": [')
+        colors = ["red", "blue", "green"]
+        for i in range(self.I):
+            output_json.write(' {{ "id": {0}, "color": "{1}" }},'.format(i, colors[i]))
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        output_json.write('] }, \n "flow": { \n "inflow": [')
+        for e_ind in range(self.m):
+            output_json.write('{')
+            for i in range(self.I):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow2.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow2.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow2.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow2.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow2.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow2.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        output_json.write('], \n "outflow": [')
+        for e_ind in range(self.m):
+            output_json.write('{')
+            for i in range(self.I):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow2.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow2.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow2.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow2.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow2.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow2.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        q_times = []
+        q_vals = []
+        for e_ind in range(self.m):
+            q_times.append([0])
+            q_vals.append([0])
+        len_q_global = len(self.q_global)
+        for t in range(len_q_global):
+            for e_ind in range(self.m):
+                if self.q_global[t][0, e_ind] != q_vals[e_ind][-1]:
+                    q_times[e_ind].append(self.global_phase[t])
+                    q_vals[e_ind].append(self.q_global[t][0, e_ind])
+        output_json.write('], \n "queues": [')
+        for e_ind in range(self.m):
+            output_json.write('{ "times": [')
+            for t in q_times[e_ind]:
+                output_json.write(' {},'.format(t))
+            output_json.close()
+            with open("output-flow2.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow2.json", "a")
+            output_json.write('], "values": [')
+            for val in q_vals[e_ind]:
+                output_json.write(' {},'.format(val))
+            output_json.close()
+            with open("output-flow2.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow2.json", "a")
+            output_json.write('], \n "domain": ["-Infinity", "Infinity"], "lastSlope": 0.0, "firstSlope": 0.0},')
+
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+        output_json = open("output-flow2.json", "a")
+        output_json.write('] } }')
+        output_json.close()
+
+        """nB = 7 * 12
+        esB = list(range(12 * 12))
+        for ano in range(11):
+              esB.remove(4 + ano*12)
+              esB.remove(8 + ano*12)
+              esB.remove(11 + ano*12)
+        esB.remove(3 +11*12)
+        esB.remove(4 +11*12)
+        esB.remove(8 +11*12)
+        esB.remove(11 +11*12)
+
+        output_json = open("output-flow.json", "w")
+        output_json.write('{"network": {\n "nodes": [')
+        output_json.close()
+        output_json = open("output-flow.json", "a")
+        for ano in range(12):
+            output_json.write(' {{"id": {0}, "x": 0.0, "y": {1}}},'.format(0 + ano*7, 0.0 - 3 * ano))
+            output_json.write(' {{"id": {0}, "x": 0.0, "y": {1}}},'.format(1 + ano*7, -2.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": -1.0, "y": {1}}},'.format(2 + ano*7, -2.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": -2.0, "y": {1}}},'.format(3 + ano*7, -1.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": -1.0, "y": {1}}},'.format(4 + ano*7, 0.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": 1.0, "y": {1}}},'.format(5 + ano*7, -2.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": 1.0, "y": {1}}},'.format(6 + ano*7, 0.0 - 3*ano))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "edges": [')
+        for e_ind in esB:
+            v_ind = self.V.index(self.E[e_ind][0])
+            w_ind = self.V.index(self.E[e_ind][1])
+            output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }},'.format(esB.index(e_ind), v_ind, w_ind, self.nu[e_ind], self.r[e_ind]))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "commodities": [')
+        colors = ["red", "blue", "green"]
+        for i in range(1):
+            output_json.write(' {{ "id": {0}, "color": "{1}" }},'.format(i, colors[i]))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('] }, \n "flow": { \n "inflow": [')
+        for e_ind in esB:
+            output_json.write('{')
+            for i in range(1):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "outflow": [')
+        for e_ind in esB:
+            output_json.write('{')
+            for i in range(1):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        q_times = {}
+        q_vals = {}
+        for e_ind in esB:
+            q_times[e_ind] = [0]
+            q_vals[e_ind] = [0]
+        len_q_global = len(self.q_global)
+        for t in range(len_q_global):
+            for e_ind in esB:
+                if self.q_global[t][e_ind] != q_vals[e_ind][-1]:
+                    q_times[e_ind].append(self.global_phase[t])
+                    q_vals[e_ind].append(self.q_global[t][e_ind])
+        output_json.write('], \n "queues": [')
+        for e_ind in esB:
+            output_json.write('{ "times": [')
+            for t in q_times[e_ind]:
+                output_json.write(' {},'.format(t))
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow.json", "a")
+            output_json.write('], "values": [')
+            for val in q_vals[e_ind]:
+                output_json.write(' {},'.format(val))
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow.json", "a")
+            output_json.write('], \n "domain": ["-Infinity", "Infinity"], "lastSlope": 0.0, "firstSlope": 0.0},')
+
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+        output_json = open("output-flow.json", "a")
+        output_json.write('] } }')
+        output_json.close()"""
+
+        """nB = 7
+        esB = list(range(12))
+        esB.remove(3)
+        esB.remove(4)
+        esB.remove(8)
+        esB.remove(11)
+
+        output_json = open("output-flow.json", "w")
+        output_json.write('{"network": {\n "nodes": [')
+        output_json.close()
+        output_json = open("output-flow.json", "a")
+        for ano in range(1):
+            output_json.write(' {{"id": {0}, "x": 0.0, "y": {1}}},'.format(0 + ano*7, 0.0 - 3 * ano))
+            output_json.write(' {{"id": {0}, "x": 0.0, "y": {1}}},'.format(1 + ano*7, -2.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": -1.0, "y": {1}}},'.format(2 + ano*7, -2.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": -2.0, "y": {1}}},'.format(3 + ano*7, -1.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": -1.0, "y": {1}}},'.format(4 + ano*7, 0.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": 1.0, "y": {1}}},'.format(5 + ano*7, -2.0 - 3*ano))
+            output_json.write(' {{"id": {0}, "x": 1.0, "y": {1}}},'.format(6 + ano*7, 0.0 - 3*ano))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "edges": [')
+        for e_ind in esB:
+            v_ind = self.V.index(self.E[e_ind][0])
+            w_ind = self.V.index(self.E[e_ind][1])
+            output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }},'.format(esB.index(e_ind), v_ind, w_ind, self.nu[e_ind], self.r[e_ind]))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "commodities": [')
+        colors = ["red", "blue", "green"]
+        for i in range(1):
+            output_json.write(' {{ "id": {0}, "color": "{1}" }},'.format(i, colors[i]))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('] }, \n "flow": { \n "inflow": [')
+        for e_ind in esB:
+            output_json.write('{')
+            for i in range(1):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "outflow": [')
+        for e_ind in esB:
+            output_json.write('{')
+            for i in range(1):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        q_times = {}
+        q_vals = {}
+        for e_ind in esB:
+            q_times[e_ind] = [0]
+            q_vals[e_ind] = [0]
+        len_q_global = len(self.q_global)
+        for t in range(len_q_global):
+            for e_ind in esB:
+                if self.q_global[t][e_ind] != q_vals[e_ind][-1]:
+                    q_times[e_ind].append(self.global_phase[t])
+                    q_vals[e_ind].append(self.q_global[t][e_ind])
+        output_json.write('], \n "queues": [')
+        for e_ind in esB:
+            output_json.write('{ "times": [')
+            for t in q_times[e_ind]:
+                output_json.write(' {},'.format(t))
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow.json", "a")
+            output_json.write('], "values": [')
+            for val in q_vals[e_ind]:
+                output_json.write(' {},'.format(val))
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow.json", "a")
+            output_json.write('], \n "domain": ["-Infinity", "Infinity"], "lastSlope": 0.0, "firstSlope": 0.0},')
+
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+        output_json = open("output-flow.json", "a")
+        output_json.write('] } }')
+        output_json.close()"""
+
+        """output_json = open("output-flow2.json", "w")
+        output_json.write('{"network": {\n "nodes": [')
+        output_json.close()
+        output_json = open("output-flow2.json", "a")
+        for v_ind in range(4):
+            output_json.write(' {{"id": {0}, "x": {1}, "y": 0.0}},'.format(v_ind, 0.0 + v_ind))
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        output_json.write('], \n "edges": [')
+        for e_ind in range(3):
+            v_ind = self.V.index(self.E[e_ind][0])
+            w_ind = self.V.index(self.E[e_ind][1])
+            output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }},'.format(e_ind, v_ind, w_ind, self.nu[e_ind], self.r[e_ind]))
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        output_json.write('], \n "commodities": [')
+        colors = ["red", "blue", "green"]
+        for i in range(self.I):
+            output_json.write(' {{ "id": {0}, "color": "{1}" }},'.format(i, colors[i]))
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        output_json.write('] }, \n "flow": { \n "inflow": [')
+        for e_ind in range(3):
+            output_json.write('{')
+            for i in range(self.I):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow2.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow2.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow2.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow2.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow2.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow2.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        output_json.write('], \n "outflow": [')
+        for e_ind in range(3):
+            output_json.write('{')
+            for i in range(self.I):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow2.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow2.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow2.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow2.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow2.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow2.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow2.json", "a")
+        q_times = []
+        q_vals = []
+        for e_ind in range(3):
+            q_times.append([0])
+            q_vals.append([0])
+        len_q_global = len(self.q_global)
+        for t in range(len_q_global):
+            for e_ind in range(3):
+                if self.q_global[t][e_ind] != q_vals[e_ind][-1]:
+                    q_times[e_ind].append(self.global_phase[t])
+                    q_vals[e_ind].append(self.q_global[t][e_ind])
+        output_json.write('], \n "queues": [')
+        for e_ind in range(3):
+            output_json.write('{ "times": [')
+            for t in q_times[e_ind]:
+                output_json.write(' {},'.format(t))
+            output_json.close()
+            with open("output-flow2.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow2.json", "a")
+            output_json.write('], "values": [')
+            for val in q_vals[e_ind]:
+                output_json.write(' {},'.format(val))
+            output_json.close()
+            with open("output-flow2.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow2.json", "a")
+            output_json.write('], \n "domain": ["-Infinity", "Infinity"], "lastSlope": 0.0, "firstSlope": 0.0},')
+
+        output_json.close()
+        with open("output-flow2.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+        output_json = open("output-flow2.json", "a")
+        output_json.write('] } }')
+        output_json.close()"""
+
+        """nB = 7 * 12 * 5
+        esB = list(range(12 * 12 * 5))
+        for bno in range(5):
+            for ano in range(12 * bno, 12 * bno + 11):
+                esB.remove(4 + ano * 12)
+                esB.remove(8 + ano * 12)
+                esB.remove(11 + ano * 12)
+            esB.remove(3 + 11 * 12 + 12 * 12 * bno)
+            esB.remove(4 + 11 * 12 + 12 * 12 * bno)
+            esB.remove(8 + 11 * 12 + 12 * 12 * bno)
+            esB.remove(11 + 11 * 12 + 12 * 12 * bno)
+
+        output_json = open("output-flow.json", "w")
+        output_json.write('{"network": {\n "nodes": [')
+        output_json.close()
+        output_json = open("output-flow.json", "a")
+        for bno in range(5):
+            for ano in range(12):
+                output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(0 + ano*7 + bno*12*7, 0.0 + bno * 5, 0.0 - 3 * ano))
+                output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(1 + ano*7 + bno*12*7, 0.0 + bno * 5, -2.0 - 3*ano))
+                output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(2 + ano*7 + bno*12*7, -1.0 + bno * 5, -2.0 - 3*ano))
+                output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(3 + ano*7 + bno*12*7, -2.0 + bno * 5, -1.0 - 3*ano))
+                output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(4 + ano*7 + bno*12*7, -1.0 + bno * 5, 0.0 - 3*ano))
+                output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(5 + ano*7 + bno*12*7, 1.0 + bno * 5, -2.0 - 3*ano))
+                output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(6 + ano*7 + bno*12*7, 1.0 + bno * 5, 0.0 - 3*ano))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "edges": [')
+        for e_ind in esB:
+            v_ind = self.V.index(self.E[e_ind][0])
+            w_ind = self.V.index(self.E[e_ind][1])
+            output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }},'.format(esB.index(e_ind), v_ind, w_ind, self.nu[e_ind], self.r[e_ind]))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "commodities": [')
+        colors = ["red", "blue", "green"]
+        for i in range(1):
+            output_json.write(' {{ "id": {0}, "color": "{1}" }},'.format(i, colors[i]))
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('] }, \n "flow": { \n "inflow": [')
+        for e_ind in esB:
+            output_json.write('{')
+            for i in range(1):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fp[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        output_json.write('], \n "outflow": [')
+        for e_ind in esB:
+            output_json.write('{')
+            for i in range(1):
+                output_json.write('"{0}": {{ \n "times": ['.format(i))
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[0]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('], \n "values": [')
+                for val in self.fm[i][e_ind]:
+                    output_json.write(' {},'.format(val[1]))
+                output_json.close()
+                with open("output-flow.json", 'rb+') as oj:
+                    oj.seek(-1, os.SEEK_END)
+                    oj.truncate()
+                    oj.close()
+                output_json = open("output-flow.json", "a")
+                output_json.write('] },')
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+            output_json = open("output-flow.json", "a")
+            output_json.write('},')
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+
+        output_json = open("output-flow.json", "a")
+        q_times = {}
+        q_vals = {}
+        for e_ind in esB:
+            q_times[e_ind] = [0]
+            q_vals[e_ind] = [0]
+        len_q_global = len(self.q_global)
+        for t in range(len_q_global):
+            for e_ind in esB:
+                if self.q_global[t][e_ind] != q_vals[e_ind][-1]:
+                    q_times[e_ind].append(self.global_phase[t])
+                    q_vals[e_ind].append(self.q_global[t][e_ind])
+        output_json.write('], \n "queues": [')
+        for e_ind in esB:
+            output_json.write('{ "times": [')
+            for t in q_times[e_ind]:
+                output_json.write(' {},'.format(t))
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow.json", "a")
+            output_json.write('], "values": [')
+            for val in q_vals[e_ind]:
+                output_json.write(' {},'.format(val))
+            output_json.close()
+            with open("output-flow.json", 'rb+') as oj:
+                oj.seek(-1, os.SEEK_END)
+                oj.truncate()
+                oj.close()
+
+            output_json = open("output-flow.json", "a")
+            output_json.write('], \n "domain": ["-Infinity", "Infinity"], "lastSlope": 0.0, "firstSlope": 0.0},')
+
+        output_json.close()
+        with open("output-flow.json", 'rb+') as oj:
+            oj.seek(-1, os.SEEK_END)
+            oj.truncate()
+            oj.close()
+        output_json = open("output-flow.json", "a")
+        output_json.write('] } }')
+        output_json.close()"""
+
+        nachwrite = time.time()
+        writetime = nachwrite - end_time
         return 0
