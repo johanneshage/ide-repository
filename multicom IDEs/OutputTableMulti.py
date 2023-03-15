@@ -5,20 +5,22 @@ import functools
 
 class OutputTableMulti(object):
 
-    def __init__(self, G, V, E, I, nu, fp, fp_ind, fm, q, phases, c, labels, vol, bd_tol):
+    def __init__(self, G, V, E, I, r, nu, fp, fp_ind, fm, q_global, q_ind, phases, labels, vol, bd_tol):
 
         self.G = G
         self.V = V  # Knotenmenge
         self.E = E  # Kantenmenge
         self.I = I  # Anzahl Güter
         self.m = len(E)  # Anzahl Kanten
-        self.q = q  # Warteschlangenlängen aller Kanten für jede Phase
+        self.q_global = q_global  # Warteschlangenlängen aller Kanten für jede Phase
+        self.q_ind = q_ind
         self.phases = phases  # Zeitpunkte der Phasenänderungen
+        self.r = r
         self.nu = nu  # Kantenkapazitäten
         self.fp = fp  # f^+ -Werte
         self.fp_ind = fp_ind  # Liste der Indizes der Phasen
         self.fm = fm  # f^- -Werte
-        self.c = c  # Kantenkosten
+        self.c = self.r.copy()  # Kantenkosten
         self.labels = labels  # Knotenlabels
         self.flow_vol = vol  # Flussvolumen zu jedem Zeitpunkt in den einzelnen Knoten
         self.table = tk.Tk()  # Ausgabetabelle
@@ -30,6 +32,21 @@ class OutputTableMulti(object):
         self.filemenuC = tk.Menu(self.menu)  # Menüpunkt Spalten
         self.menu.add_cascade(label="Zeilen", menu=self.filemenuR)
         self.menu.add_cascade(label="Spalten", menu=self.filemenuC)
+        self.q = np.zeros(self.m)
+        self.q_prev = np.zeros(self.m)
+        self.q_next = np.zeros(self.m)
+        self.phase_ind = 0
+
+        for e_ind in range(self.m):
+            if 1 in self.q_ind[e_ind]:
+                self.q_next[e_ind] = self.q_global[e_ind][1]
+            else:
+                qe_end = self.q_ind[e_ind][-1]
+                for next_phase in range(2, qe_end + 1, 1):
+                    if next_phase in self.q_ind[e_ind]:
+                        delta_q = self.q_global[e_ind][1] / self.phases[next_phase]
+                        self.q_next[e_ind] = delta_q * self.phases[1]
+                        break
 
         # Variablen der Checkboxen zu den Zeilengruppen
         # self.CheckVarAll = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen
@@ -79,7 +96,6 @@ class OutputTableMulti(object):
         self.cols = len(self.col_heads)
         self.single_cols = [4, 5, 6]
         self.multi_cols = [1, 2, 3, 7]
-        self.phase_ind = 0
 
         # Gitter der Größe <#Kanten + 2> x <#Spalten + 1>. Die ersten zwei Zeilen sind für Überschrift und Trennlinie,
         # die erste Spalte für die Bezeichnungen der Kanten. Der Rest des Gitters der Größe <#Kanten> x <#Spalten> ent-
@@ -133,8 +149,8 @@ class OutputTableMulti(object):
             total_inflow = 0
             for i in range(self.I):
                 total_inflow += self.fp[i][ro][0][1]
-            self.grid_entries[grid_ro, 5].insert('end', self.change_of_cost(ro, 0, total_inflow))
-            self.grid_entries[grid_ro, 6].insert('end', self.c[0][ro])
+            self.grid_entries[grid_ro, 5].insert('end', self.change_of_cost(ro, total_inflow))
+            self.grid_entries[grid_ro, 6].insert('end', self.c[ro])
 
             for i in range(self.I):
                 self.frame_entries[ro, 0, i].insert('end', i)
@@ -164,7 +180,7 @@ class OutputTableMulti(object):
 
         self.table.mainloop()
 
-    def change_of_cost(self, e_ind, phase_ind, z):
+    def change_of_cost(self, e_ind, z):
         """
         Gibt die momentane Kostenänderung der Kante mit Index 'e_ind' bei (Gesamt-)Zufluss 'z' an.
         :param e_ind: Index der betrachteten Kante
@@ -175,7 +191,7 @@ class OutputTableMulti(object):
         dif = z - self.nu[e_ind]
         if abs(dif) < self.bd_tol * self.I:
             return 0
-        if self.q[phase_ind][0, e_ind] > self.eps:
+        if self.q[e_ind] > self.eps:
             return dif / self.nu[e_ind]
         return np.max([dif / self.nu[e_ind], 0])
 
@@ -236,7 +252,7 @@ class OutputTableMulti(object):
             for ro in non_hidden_rows:
                 v = self.E[ro][0]
                 v_ind = self.V.index(v)
-                if self.flow_vol[self.phase_ind][v_ind] > 0 and self.q[self.phase_ind][0, ro] < self.eps:
+                if self.flow_vol[self.phase_ind][v_ind] > 0 and self.q[ro] < self.eps:
                     self.hidden_rows.append(ro)
                     for co in non_hidden_cols:
                         self.grid_entries[ro + 2, co].grid_remove()
@@ -265,7 +281,7 @@ class OutputTableMulti(object):
         if self.CheckVarPosQ.get():
             init_rows = self.hidden_rows.copy()
             for ro in init_rows:
-                if self.q[self.phase_ind][0, ro] > 0:
+                if self.q[ro] > 0:
                     self.hidden_rows.remove(ro)
                     for co in non_hidden_cols:
                         self.grid_entries[ro + 2, co].grid()
@@ -273,14 +289,14 @@ class OutputTableMulti(object):
             non_hidden_rows = list(set(range(self.m)) - set(self.hidden_rows))
             for ro in non_hidden_rows:
                 v_ind = self.V.index(self.E[ro][0])
-                if self.q[self.phase_ind][0, ro] > 0 and self.flow_vol[self.phase_ind][v_ind] < self.eps:
+                if self.q[ro] > 0 and self.flow_vol[self.phase_ind][v_ind] < self.eps:
                     self.hidden_rows.append(ro)
                     for co in non_hidden_cols:
                         self.grid_entries[ro + 2, co].grid_remove()
         else:
             non_hidden_rows = list(set(range(self.m)) - set(self.hidden_rows))
             for ro in non_hidden_rows:
-                if self.q[self.phase_ind][0, ro] > 0:
+                if self.q[ro] > 0:
                     self.hidden_rows.append(ro)
                     for co in non_hidden_cols:
                         self.grid_entries[ro + 2, co].grid_remove()
@@ -355,6 +371,23 @@ class OutputTableMulti(object):
         self.phase_ind += 1
         theta = self.phases[self.phase_ind]
         self.table.title("Zeit: {}".format(theta))
+        self.q_prev = self.q.copy()
+        self.q = self.q_next.copy()
+        for e_ind in range(self.m):
+            self.c[e_ind] = self.r[e_ind] + self.q[e_ind]/self.nu[e_ind]
+        if self.phase_ind < len(self.phases) - 1:
+            for e_ind in range(self.m):
+                phase_n = self.phase_ind + 1
+                if phase_n in self.q_ind[e_ind]:
+                    self.q_next[e_ind] = self.q_global[e_ind][self.q_ind[e_ind].index(phase_n)]
+                else:
+                    qe_end = self.q_ind[e_ind][-1]
+                    for next_phase in range(phase_n + 1, qe_end + 1, 1):
+                        if next_phase in self.q_ind[e_ind]:
+                            qe_ind = self.q_ind[e_ind].index(next_phase)
+                            delta_q = (self.q_global[e_ind][qe_ind] - self.q_global[e_ind][qe_ind - 1]) / (self.phases[next_phase] - self.phases[self.q_ind[e_ind][qe_ind - 1]])
+                            self.q_next[e_ind] = self.q[e_ind] + delta_q * (self.phases[self.phase_ind + 1] - theta)
+                            break
         for ro in range(self.m):
             grid_ro = ro + 2
             for co in [4, 6]:
@@ -382,6 +415,14 @@ class OutputTableMulti(object):
                     fp_frame[i].config(state='normal')
                     fp_frame[i].delete(1.0, tk.END)
                     fp_frame[i].insert('end', self.fp[i][ro][ind][1])
+                else:
+                    for pi in range(self.phase_ind - 1, -1, -1):
+                        if pi in self.fp_ind[i][ro]:
+                            ind = self.fp_ind[i][ro].index(pi)
+                            if self.fp[i][ro][0] == (0, 0):
+                                ind += 1
+                            fp_sum += self.fp[i][ro][ind][1]
+                            break
 
                 fm_times = [t for (t, v) in self.fm[i][ro]]
                 fm_where = np.where([0 <= theta - t < 2 * self.bd_tol * self.I and not (0 <= self.phases[self.phase_ind-1] - t < 2 * self.bd_tol * self.I) for t in fm_times])[0]
@@ -393,17 +434,17 @@ class OutputTableMulti(object):
                     fm_entry.insert('end', self.fm[i][ro][fm_ind][1])
 
             if fp_changed:
-                change = self.change_of_cost(ro, self.phase_ind, fp_sum)
+                change = self.change_of_cost(ro, fp_sum)
                 q_delta.config(state='normal')
                 q_delta.delete(1.0, tk.END)
                 q_delta.insert('end', change)
-            elif abs(self.q[self.phase_ind][0, ro]) < self.eps:
+            elif abs(self.q[ro]) < self.eps:
                 q_delta.config(state='normal')
                 q_delta.delete(1.0, tk.END)
                 q_delta.insert('end', 0)
 
-            self.grid_entries[grid_ro, 4].insert('end', self.q[self.phase_ind][0, ro])
-            self.grid_entries[grid_ro, 6].insert('end', self.c[self.phase_ind][ro])
+            self.grid_entries[grid_ro, 4].insert('end', self.q[ro])
+            self.grid_entries[grid_ro, 6].insert('end', self.c[ro])
             for i in range(self.I):
                 self.frame_entries[ro, 3, i].insert('end', self.labels[i][self.phase_ind][self.V.index(self.E[ro][1])])
 
@@ -429,6 +470,27 @@ class OutputTableMulti(object):
         self.phase_ind -= 1
         theta = self.phases[self.phase_ind]
         self.table.title("Zeit: {}".format(theta))
+        self.q_next = self.q.copy()
+        self.q = self.q_prev.copy()
+        for e_ind in range(self.m):
+            self.c[e_ind] = self.r[e_ind] + self.q[e_ind]/self.nu[e_ind]
+        if self.phase_ind > 0:
+            for e_ind in range(self.m):
+                if len(self.q_ind[e_ind]) == 1:
+                    continue
+                phase_p = self.phase_ind - 1
+                if phase_p in self.q_ind[e_ind]:
+                    self.q_prev[e_ind] = self.q_global[e_ind][self.q_ind[e_ind].index(phase_p)]
+                else:
+                    for prev_phase in range(phase_p - 1, -1, -1):
+                        if prev_phase in self.q_ind[e_ind]:
+                            qe_ind = self.q_ind[e_ind].index(prev_phase)
+                            if len(self.q_ind[e_ind][qe_ind:]) == 1:
+                                self.q_prev[e_ind] = 0
+                                break
+                            delta_q = (self.q_global[e_ind][qe_ind + 1] - self.q_global[e_ind][qe_ind]) / (self.phases[self.q_ind[e_ind][qe_ind + 1]] - self.phases[prev_phase])
+                            self.q_prev[e_ind] = self.q[e_ind] - delta_q * (theta - self.phases[self.phase_ind - 1])
+                            break
         for ro in range(self.m):
             grid_ro = ro + 2
             for co in [4, 6]:
@@ -456,6 +518,14 @@ class OutputTableMulti(object):
                     fp_frame[i].config(state='normal')
                     fp_frame[i].delete(1.0, tk.END)
                     fp_frame[i].insert('end', self.fp[i][ro][ind][1])
+                else:
+                    for pi in range(self.phase_ind, -1, -1):
+                        if pi in self.fp_ind[i][ro]:
+                            ind = self.fp_ind[i][ro].index(pi)
+                            if self.fp[i][ro][0] == (0, 0):
+                                ind += 1
+                            fp_sum += self.fp[i][ro][ind][1]
+                            break
 
                 # setze alle f^- Einträge für die aktuelle Schrittweite
                 fm_times = [t for (t, v) in self.fm[i][ro]]
@@ -477,18 +547,18 @@ class OutputTableMulti(object):
             if fp_changed:
                 q_delta.config(state='normal')
                 q_delta.delete(1.0, tk.END)
-                q_delta.insert('end', self.change_of_cost(ro, self.phase_ind, fp_sum))
-            elif abs(self.q[self.phase_ind][0, ro]) > self.eps > abs(self.q[self.phase_ind + 1][0, ro]):
+                q_delta.insert('end', self.change_of_cost(ro, fp_sum))
+            elif abs(self.q[ro]) > self.eps > abs(self.q_next[ro]):
                 # berechne Rate, mit der Warteschlange abgebaut wird (abhängig von Einfluss < 'self.nu[ro]')
-                dq_dnu = - self.q[self.phase_ind][0, ro] / ((old_theta - theta) * self.nu[ro])
+                dq_dnu = - self.q[ro] / ((old_theta - theta) * self.nu[ro])
                 if -1 - self.bd_tol * self.I < dq_dnu < -1 + self.bd_tol * self.I:
                     dq_dnu = -1.0
                 q_delta.config(state='normal')
                 q_delta.delete(1.0, tk.END)
                 q_delta.insert('end', dq_dnu)
 
-            self.grid_entries[grid_ro, 4].insert('end', self.q[self.phase_ind][0, ro])
-            self.grid_entries[grid_ro, 6].insert('end', self.c[self.phase_ind][ro])
+            self.grid_entries[grid_ro, 4].insert('end', self.q[ro])
+            self.grid_entries[grid_ro, 6].insert('end', self.c[ro])
             for i in range(self.I):
                 self.frame_entries[ro, 3, i].insert('end', self.labels[i][self.phase_ind][self.V.index(self.E[ro][1])])
 
