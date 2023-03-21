@@ -1,6 +1,8 @@
 import os
-import data
 import pickle
+import sys
+sys.path.append(".")
+import data
 
 graph = data.graph
 u = data.u
@@ -30,7 +32,7 @@ def loadall(filename):
                 break
 
 
-items = loadall('non_term-6.txt')
+items = loadall("output_examples/no_term200-6.txt")
 
 for (no, item) in enumerate(items):
     if no == 0:
@@ -39,6 +41,8 @@ for (no, item) in enumerate(items):
         fm = item.copy()
     elif no == 2:
         q_global = item.copy()
+    elif no == 3:
+        q_ind = item.copy()
     else:
         global_phase = item.copy()
 
@@ -81,10 +85,10 @@ for i in range(I):
         esB.remove(8 + 8 * 12 + 12 * 12 * 5 + 12 * 6 * 5 + 12 * 9 * bno + 135 * i * 12 + 15 * i)
         esB.remove(11 + 8 * 12 + 12 * 12 * 5 + 12 * 6 * 5 + 12 * 9 * bno + 135 * i * 12 + 15 * i)
 
-output_json = open("output-flow.json", "w")
+output_json = open("output_examples/output-flow75-6.json", "w")
 output_json.write('{"network": {\n "nodes": [')
 output_json.close()
-output_json = open("output-flow.json", "a")
+output_json = open("output_examples/output-flow75-6.json", "a")
 for i in range(I):
     # B2
     for bno in range(5):
@@ -117,151 +121,108 @@ for i in range(I):
             output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(635 + ano*7 + bno*9*7 + 945 * i, 51.0 + bno * 5 + i * 87, -2.0 - 3*ano))
             output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(636 + ano*7 + bno*9*7 + 945 * i, 51.0 + bno * 5 + i * 87, 0.0 - 3*ano))
 output_json.write(' {{"id": {0}, "x": {1}, "y": {2}, "label": "{3}"}},'.format(1890, 119.0, -42.0, "red"))
-output_json.write(' {{"id": {0}, "x": {1}, "y": {2}, "label": "{3}"}},'.format(1891, 39.0, -42.0, "blue"))
-output_json.close()
-with open("output-flow.json", 'rb+') as oj:
-    oj.seek(-1, os.SEEK_END)
-    oj.truncate()
-    oj.close()
+output_json.write(' {{"id": {0}, "x": {1}, "y": {2}, "label": "{3}"}}'.format(1891, 39.0, -42.0, "blue"))
 
-output_json = open("output-flow.json", "a")
 output_json.write('], \n "edges": [')
-for e_ind in esB:
+for e_ind in esB[:-1]:
     v_ind = V.index(E[e_ind][0])
     w_ind = V.index(E[e_ind][1])
     output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }},'.format(esB.index(e_ind), nB.index(v_ind), nB.index(w_ind), nu[e_ind], r[e_ind]))
-output_json.close()
-with open("output-flow.json", 'rb+') as oj:
-    oj.seek(-1, os.SEEK_END)
-    oj.truncate()
-    oj.close()
+output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }}'.format(esB.index(esB[-1]), nB.index(V.index(E[esB[-1]][0])), nB.index(V.index(E[esB[-1]][1])), nu[esB[-1]], r[esB[-1]]))
 
-output_json = open("output-flow.json", "a")
 output_json.write('], \n "commodities": [')
 colors = ["red", "blue", "green"]
-for i in range(I):
+for i in range(I-1):
     output_json.write(' {{ "id": {0}, "color": "{1}" }},'.format(i, colors[i]))
-output_json.close()
-with open("output-flow.json", 'rb+') as oj:
-    oj.seek(-1, os.SEEK_END)
-    oj.truncate()
-    oj.close()
+output_json.write(' {{ "id": {0}, "color": "{1}" }}'.format(I-1, colors[I-1]))
 
-output_json = open("output-flow.json", "a")
 output_json.write('] }, \n "flow": { \n "inflow": [')
 for e_ind in esB:
     output_json.write('{')
     for i in range(I):
         output_json.write('"{0}": {{ \n "times": ['.format(i))
-        for val in fp[i][e_ind]:
+        for val in fp[i][e_ind][:-1]:
             output_json.write(' {},'.format(val[0]))
-        output_json.close()
-        with open("output-flow.json", 'rb+') as oj:
-            oj.seek(-1, os.SEEK_END)
-            oj.truncate()
-            oj.close()
-        output_json = open("output-flow.json", "a")
+        output_json.write(' {}'.format(fp[i][e_ind][-1][0]))
+
         output_json.write('], \n "values": [')
-        for val in fp[i][e_ind]:
+        for val in fp[i][e_ind][:-1]:
             output_json.write(' {},'.format(val[1]))
-        output_json.close()
-        with open("output-flow.json", 'rb+') as oj:
-            oj.seek(-1, os.SEEK_END)
-            oj.truncate()
-            oj.close()
-        output_json = open("output-flow.json", "a")
+        output_json.write(' {}'.format(fp[i][e_ind][-1][1]))
+
         output_json.write('] },')
     output_json.close()
-    with open("output-flow.json", 'rb+') as oj:
+    with open("output_examples/output-flow75-6.json", 'rb+') as oj:
         oj.seek(-1, os.SEEK_END)
         oj.truncate()
         oj.close()
-    output_json = open("output-flow.json", "a")
+    output_json = open("output_examples/output-flow75-6.json", "a")
     output_json.write('},')
 output_json.close()
-with open("output-flow.json", 'rb+') as oj:
+with open("output_examples/output-flow75-6.json", 'rb+') as oj:
     oj.seek(-1, os.SEEK_END)
     oj.truncate()
     oj.close()
 
-output_json = open("output-flow.json", "a")
+output_json = open("output_examples/output-flow75-6.json", "a")
 output_json.write('], \n "outflow": [')
 for e_ind in esB:
     output_json.write('{')
     for i in range(I):
         output_json.write('"{0}": {{ \n "times": ['.format(i))
-        for val in fm[i][e_ind]:
+        for val in fm[i][e_ind][:-1]:
             output_json.write(' {},'.format(val[0]))
-        output_json.close()
-        with open("output-flow.json", 'rb+') as oj:
-            oj.seek(-1, os.SEEK_END)
-            oj.truncate()
-            oj.close()
-        output_json = open("output-flow.json", "a")
+        output_json.write(' {}'.format(fm[i][e_ind][-1][0]))
+
         output_json.write('], \n "values": [')
-        for val in fm[i][e_ind]:
+        for val in fm[i][e_ind][:-1]:
             output_json.write(' {},'.format(val[1]))
-        output_json.close()
-        with open("output-flow.json", 'rb+') as oj:
-            oj.seek(-1, os.SEEK_END)
-            oj.truncate()
-            oj.close()
-        output_json = open("output-flow.json", "a")
+        output_json.write(' {}'.format(fm[i][e_ind][-1][1]))
+
         output_json.write('] },')
     output_json.close()
-    with open("output-flow.json", 'rb+') as oj:
+    with open("output_examples/output-flow75-6.json", 'rb+') as oj:
         oj.seek(-1, os.SEEK_END)
         oj.truncate()
         oj.close()
-    output_json = open("output-flow.json", "a")
+    output_json = open("output_examples/output-flow75-6.json", "a")
     output_json.write('},')
 output_json.close()
-with open("output-flow.json", 'rb+') as oj:
+with open("output_examples/output-flow75-6.json", 'rb+') as oj:
     oj.seek(-1, os.SEEK_END)
     oj.truncate()
     oj.close()
 
-output_json = open("output-flow.json", "a")
+output_json = open("output_examples/output-flow75-6.json", "a")
 q_times = {}
 q_vals = {}
 for e_ind in esB:
-    q_times[e_ind] = [0]
-    q_vals[e_ind] = [0]
-len_q_global = len(q_global)
-for t in range(len_q_global):
-    for e_ind in esB:
-        if q_global[t][0, e_ind] != q_vals[e_ind][-1]:
-            q_times[e_ind].append(global_phase[t])
-            q_vals[e_ind].append(q_global[t][0, e_ind])
+    q_times[e_ind] = []
+    q_vals[e_ind] = []
+for e_ind in esB:
+    len_qe = len(q_global[e_ind])
+    for t in range(len_qe):
+        q_times[e_ind].append(global_phase[q_ind[e_ind][t]])
+        q_vals[e_ind].append(q_global[e_ind][t])
 output_json.write('], \n "queues": [')
 for e_ind in esB:
     output_json.write('{ "times": [')
-    for t in q_times[e_ind]:
+    for t in q_times[e_ind][:-1]:
         output_json.write(' {},'.format(t))
-    output_json.close()
-    with open("output-flow.json", 'rb+') as oj:
-        oj.seek(-1, os.SEEK_END)
-        oj.truncate()
-        oj.close()
+    output_json.write(' {}'.format(q_times[e_ind][-1]))
 
-    output_json = open("output-flow.json", "a")
     output_json.write('], "values": [')
-    for val in q_vals[e_ind]:
+    for val in q_vals[e_ind][:-1]:
         output_json.write(' {},'.format(val))
-    output_json.close()
-    with open("output-flow.json", 'rb+') as oj:
-        oj.seek(-1, os.SEEK_END)
-        oj.truncate()
-        oj.close()
+    output_json.write(' {}'.format(q_vals[e_ind][-1]))
 
-    output_json = open("output-flow.json", "a")
     output_json.write('], \n "domain": ["-Infinity", "Infinity"], "lastSlope": 0.0, "firstSlope": 0.0},')
 
 output_json.close()
-with open("output-flow.json", 'rb+') as oj:
+with open("output_examples/output-flow75-6.json", 'rb+') as oj:
     oj.seek(-1, os.SEEK_END)
     oj.truncate()
     oj.close()
-output_json = open("output-flow.json", "a")
+output_json = open("output_examples/output-flow75-6.json", "a")
 output_json.write('] } }')
 output_json.close()

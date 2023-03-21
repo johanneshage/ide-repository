@@ -1,6 +1,8 @@
 import os
-import data
 import pickle
+import sys
+sys.path.append(".")
+import data
 
 graph = data.graph
 u = data.u
@@ -8,7 +10,7 @@ coords = data.v_coords
 items = graph.items()
 keys = graph.keys()
 
-path = "output-flow-holzkirchen.json"
+path = "output_examples/output-flow-holzkirchen.json"
 assert os.path.isfile(path)
 
 V = list(graph.keys())
@@ -34,7 +36,7 @@ def loadall(filename):
                 break
 
 
-items = loadall('holzkirchen.txt')
+items = loadall('output_examples/holzkirchen.txt')
 
 for (no, item) in enumerate(items):
     if no == 0:
@@ -43,6 +45,8 @@ for (no, item) in enumerate(items):
         fm = item.copy()
     elif no == 2:
         q_global = item.copy()
+    elif no == 3:
+        q_ind = item.copy()
     else:
         global_phase = item.copy()
 
@@ -142,12 +146,12 @@ for e_ind in range(m):
 q_times = {}
 q_vals = {}
 for e_ind in range(m):
-    q_times[e_ind] = [0]
-    q_vals[e_ind] = [0]
+    q_times[e_ind] = []
+    q_vals[e_ind] = []
 for e_ind in range(m):
     len_qe = len(q_global[e_ind])
     for t in range(len_qe):
-        q_times[e_ind].append(global_phase[t])
+        q_times[e_ind].append(global_phase[q_ind[e_ind][t]])
         q_vals[e_ind].append(q_global[e_ind][t])
 output_json.write('], \n "queues": [')
 for e_ind in range(m):
