@@ -10,8 +10,8 @@ coords = data.v_coords
 items = graph.items()
 keys = graph.keys()
 
-path = "output_examples/output-flow-holzkirchen.json"
-assert os.path.isfile(path)
+path = "output_examples/holzkirchen_komplett-6.json"
+#assert os.path.isfile(path)
 
 V = list(graph.keys())
 E = []  # Kanten
@@ -36,7 +36,7 @@ def loadall(filename):
                 break
 
 
-items = loadall('output_examples/holzkirchen.txt')
+items = loadall('output_examples/holzkirchen_komplett-6.txt')
 
 for (no, item) in enumerate(items):
     if no == 0:
@@ -54,56 +54,52 @@ output_json = open(path, "w")
 output_json.write('{"network": {\n "nodes": [')
 output_json.close()
 output_json = open(path, "a")
-for v_ind in range(620):
+for v_ind in range(1928):
     v = V[v_ind]
     output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(v_ind, coords[v][0], coords[v][1]))
-output_json.write(' {{"id": {0}, "x": {1}, "y": {2}, "label": "{3}"}},'.format(620, coords['t2'][0], coords['t2'][1], "t2"))
+output_json.write(' {{"id": {0}, "x": {1}, "y": {2}, "label": "{3}"}},'.format(1928, coords['t2'][0], coords['t2'][1], "t2"))
 
-for v_ind in range(621, 1572, 1):
+for v_ind in range(1929, 2169, 1):
     v = V[v_ind]
     output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(v_ind, coords[v][0], coords[v][1]))
-output_json.write(' {{"id": {0}, "x": {1}, "y": {2}, "label": "{3}"}},'.format(1572, coords['t1'][0], coords['t1'][1], "t1"))
+output_json.write(' {{"id": {0}, "x": {1}, "y": {2}, "label": "{3}"}},'.format(2169, coords['t1'][0], coords['t1'][1], "t1"))
 
-for v_ind in range(1573, n, 1):
+for v_ind in range(2169, n-1, 1):
     v = V[v_ind]
     output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}},'.format(v_ind, coords[v][0], coords[v][1]))
-output_json.close()
+output_json.write(' {{"id": {0}, "x": {1}, "y": {2}}}'.format(n-1, coords[V[n-1]][0], coords[V[n-1]][1]))
 
-with open(path, 'rb+') as oj:
-    oj.seek(-1, os.SEEK_END)
-    oj.truncate()
-    oj.close()
-
-output_json = open(path, "a")
 output_json.write('], \n "edges": [')
-for e_ind in range(m):
+for e_ind in range(m-1):
     v_ind = V.index(E[e_ind][0])
     w_ind = V.index(E[e_ind][1])
     output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }},'.format(e_ind, v_ind, w_ind, nu[e_ind], r[e_ind]))
-output_json.close()
-with open(path, 'rb+') as oj:
-    oj.seek(-1, os.SEEK_END)
-    oj.truncate()
-    oj.close()
 
-output_json = open(path, "a")
+v_ind = V.index(E[m-1][0])
+w_ind = V.index(E[m-1][1])
+output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }}'.format(m-1, v_ind, w_ind, nu[m-1], r[m-1]))
+
 output_json.write('], \n "commodities": [')
 colors = ["red", "blue", "green"]
-for i in range(I):
+for i in range(I-1):
     output_json.write(' {{ "id": {0}, "color": "{1}" }},'.format(i, colors[i]))
-output_json.close()
-with open(path, 'rb+') as oj:
-    oj.seek(-1, os.SEEK_END)
-    oj.truncate()
-    oj.close()
+output_json.write(' {{ "id": {0}, "color": "{1}" }}'.format(I-1, colors[I-1]))
 
-output_json = open(path, "a")
 output_json.write('] }, \n "flow": { \n "inflow": [')
+fpes = {}
+for v_ind in range(n):
+    fpes[v_ind] = {}
 for e_ind in range(m):
+    v_ind = V.index(E[e_ind][0])
     output_json.write('{')
     for i in range(I):
         output_json.write('"{0}": {{ \n "times": ['.format(i))
         for val in fp[i][e_ind][:-1]:
+            if val[1] > 0:
+                if val[0] not in fpes[v_ind]:
+                    fpes[v_ind][val[0]] = 1
+                else:
+                    fpes[v_ind][val[0]] += 1
             output_json.write(' {},'.format(val[0]))
         output_json.write(' {}'.format(fp[i][e_ind][-1][0]))
 
