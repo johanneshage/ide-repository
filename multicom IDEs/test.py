@@ -1,25 +1,44 @@
-# init K: zulässige Menge durch [A,b], mit Ax = b äq zu x in K
+from collections import defaultdict
+import scipy.sparse
+import functools
+import numpy as np
+
+
 I = 2
-n = 7
-m = 8
+m= 20
 
-A_1 = np.zeros((I * (n-1), I * m))
-A_2 = np.zeros((I, I * m))
+# def_dict = np.dtype(functools.partial(defaultdict, list))
+fpi = defaultdict(list)
+# fp = lil_matrix((I, m), dtype=functools.partial(defaultdict, list))
 
-b_1 = np.zeros(I * (n-1))
-b_2 = np.zeros(I)
+fpi[-1]
 
-for i in range(I):
-    V_i = self.V - ['t{}'.format(i+1)]
-    for v in V_i:
-        v_ind = self.V_i.index(v)
-        b_1[i * (n-1) + v_ind] = self.b[i][self.V.index(v)]
-        delta_v = self.get_outgoing_edges(v)  # Liste der Kantenindizes
-        for e_ind in delta_v:
-            A_1[i * (n-1) + v_ind][i * m + e_ind] = 1
+eind = 2
+print("defdict0", fpi[eind])
+fpi[eind].append(5)
+print("defdict", fpi[eind])
 
-    for v in self.V:
-        delta_v_inact = self.get_outgoing_edges(v) - self.get_outgoing_active_edges(i, v)
-        for e_ind in delta_v_inact:
-            A_2[i][i * m + e_ind] = 1
+#fp[0,0] = list([])
+#fp[0, 0].append((0, 1))
+#fp[1, 11].append((1, 2))
+#fp[0,0].append((1.1, 0))
 
+#print("00", fp[0,0])
+#fp[0 , 0] += [1]
+#np.append(fp[0, 0], 1)
+
+#print("FP", fp)
+
+liste1 = [0, 1.5, 0, 0, 1.9, 0]
+matrix1 = scipy.sparse.csr_matrix(liste1)
+print(matrix1)
+
+for e in range(6):
+    print("LISTE", matrix1[0, e])
+
+bounds = set()
+print("bounds1", bounds)
+bounds += {1}
+print("bounds2", bounds)
+bounds += {2}
+print("bounds3", bounds)

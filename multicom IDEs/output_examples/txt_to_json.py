@@ -1,7 +1,7 @@
 import os
 import pickle
 import sys
-sys.path.append(".")
+sys.path.append("..")
 import data
 
 graph = data.graph
@@ -32,7 +32,8 @@ def loadall(filename):
                 break
 
 
-items = loadall("output_examples/no_term200-6.txt")
+# items = loadall("output_examples/no_term250-5.txt")
+items = loadall("no_term250-5.txt")
 
 for (no, item) in enumerate(items):
     if no == 0:
@@ -85,10 +86,10 @@ for i in range(I):
         esB.remove(8 + 8 * 12 + 12 * 12 * 5 + 12 * 6 * 5 + 12 * 9 * bno + 135 * i * 12 + 15 * i)
         esB.remove(11 + 8 * 12 + 12 * 12 * 5 + 12 * 6 * 5 + 12 * 9 * bno + 135 * i * 12 + 15 * i)
 
-output_json = open("output_examples/output-flow75-6.json", "w")
+output_json = open("of_nt250-5.json", "w")
 output_json.write('{"network": {\n "nodes": [')
 output_json.close()
-output_json = open("output_examples/output-flow75-6.json", "a")
+output_json = open("of_nt250-5.json", "a")
 for i in range(I):
     # B2
     for bno in range(5):
@@ -152,19 +153,19 @@ for e_ind in esB:
 
         output_json.write('] },')
     output_json.close()
-    with open("output_examples/output-flow75-6.json", 'rb+') as oj:
+    with open("of_nt250-5.json", 'rb+') as oj:
         oj.seek(-1, os.SEEK_END)
         oj.truncate()
         oj.close()
-    output_json = open("output_examples/output-flow75-6.json", "a")
+    output_json = open("of_nt250-5.json", "a")
     output_json.write('},')
 output_json.close()
-with open("output_examples/output-flow75-6.json", 'rb+') as oj:
+with open("of_nt250-5.json", 'rb+') as oj:
     oj.seek(-1, os.SEEK_END)
     oj.truncate()
     oj.close()
 
-output_json = open("output_examples/output-flow75-6.json", "a")
+output_json = open("of_nt250-5.json", "a")
 output_json.write('], \n "outflow": [')
 for e_ind in esB:
     output_json.write('{')
@@ -181,19 +182,19 @@ for e_ind in esB:
 
         output_json.write('] },')
     output_json.close()
-    with open("output_examples/output-flow75-6.json", 'rb+') as oj:
+    with open("of_nt250-5.json", 'rb+') as oj:
         oj.seek(-1, os.SEEK_END)
         oj.truncate()
         oj.close()
-    output_json = open("output_examples/output-flow75-6.json", "a")
+    output_json = open("of_nt250-5.json", "a")
     output_json.write('},')
 output_json.close()
-with open("output_examples/output-flow75-6.json", 'rb+') as oj:
+with open("of_nt250-5.json", 'rb+') as oj:
     oj.seek(-1, os.SEEK_END)
     oj.truncate()
     oj.close()
 
-output_json = open("output_examples/output-flow75-6.json", "a")
+output_json = open("of_nt250-5.json", "a")
 q_times = {}
 q_vals = {}
 for e_ind in esB:
@@ -219,10 +220,10 @@ for e_ind in esB:
     output_json.write('], \n "domain": ["-Infinity", "Infinity"], "lastSlope": 0.0, "firstSlope": 0.0},')
 
 output_json.close()
-with open("output_examples/output-flow75-6.json", 'rb+') as oj:
+with open("of_nt250-5.json", 'rb+') as oj:
     oj.seek(-1, os.SEEK_END)
     oj.truncate()
     oj.close()
-output_json = open("output_examples/output-flow75-6.json", "a")
+output_json = open("of_nt250-5.json", "a")
 output_json.write('] } }')
 output_json.close()

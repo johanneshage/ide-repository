@@ -32,13 +32,13 @@ class ContAppMulti:
         self.G = G
         self.u = u
         self.I = len(self.u)
-        self.labels = []  # Knotenlabels
+        self.labels = []  # approximierte Knotenlabels
         self.V = list(G.keys())  # Liste der Knoten
         self.n = len(self.V)  # Anzahl Knoten
         self.b = scipy.sparse.lil_matrix((self.I, self.n))
         self.items = G.items()
         self.keys = G.keys()
-        self.eps = 10**(-12)  # Rechengenauigkeit
+        self.eps = 10**(-14)  # Rechengenauigkeit
         self.bd_tol = 10**(-5)
         # self.flow_vol = []  # merke Flusswerte in den einzelnen Knoten für OutputTable # NUR FÜR OutputTable BENÖTIGT UND KOSTET SPEICHER
         self.delta_p = {}
@@ -49,9 +49,9 @@ class ContAppMulti:
                 self.r.append(list(self.items)[list(self.keys).index(delta[0])][1][w][1])  # speichere Reisezeiten in r
                 self.nu.append(list(self.items)[list(self.keys).index(delta[0])][1][w][0])  # Kapazitäten in nu
         self.m = len(self.E)  # Anz. Kanten
-        self.c = np.zeros(self.m)  # Kantenkosten für alle Kanten (Reisezeit + Warteschlangenlänge / Kapazität)
+        self.c = np.zeros(self.m)  # approximierte Kantenkosten für alle Kanten (Reisezeit + Warteschlangenlänge / Kapazität)
+        self.c_exact = np.zeros(self.m)  # exakte Kantenkosten
         self.global_phase = [0]  # speichere Startzeitpunkte der "globalen" Phasen, also alle Zeitpunkte, zu denen sich mindestens eine lokale Phase ändert
-        # self.q_global = [scipy.sparse.csr_matrix(np.zeros(self.m))]  # speichere für jede globale Phase alle momentanen Warteschlangenlängen zu Beginn der Phase
 
         self.fp = [[] for _ in range(self.I)]  # f^+    [[],[]]
         self.fp_ind = [[] for _ in range(self.I)]  # Liste der Indizes der Phasen # NUR FÜR OutputTable BENÖTIGT UND KOSTET SPEICHER (?)
@@ -67,6 +67,7 @@ class ContAppMulti:
 
         for e_ind in range(self.m):  # Initialisierung "self.c" (Kosten)
             self.c[e_ind] = self.r[e_ind]
+            self.c_exact[e_ind] = self.r[e_ind]
 
         # Zeitpunkte, zu denen sich der Zufluss in mindestens einem Quellknoten ändert
         self.u_start = set()
@@ -107,7 +108,7 @@ class ContAppMulti:
         for item in items:
             self.labels.append(item.copy())"""
 
-        """items = loadall('output_examples/holzkirchen05-8.txt')
+        """items = loadall('output_examples/new_no_term40-5.txt')
 
         for (no, item) in enumerate(items):
             if no == 0:
@@ -143,15 +144,15 @@ class ContAppMulti:
             elif no == 15:
                 dp_act_old = item.copy()
             elif no == 16:
-                max_ld = item.copy()
+                max_dif = item
             elif no == 17:
-                max_diff = item.copy()
-            elif no == 18:
                 delta_p_act = item.copy()
-            elif no == 19:
+            elif no == 18:
                 delta_p_inact = item.copy()
+            elif no == 19:
+                top_ords = item.copy()
             else:
-                top_ords = item.copy()"""
+                nu_min = item.copy()"""
 
         self.E_active = scipy.sparse.lil_matrix((self.I, self.m))
         for (v_ind, v) in enumerate(self.V):
@@ -165,7 +166,7 @@ class ContAppMulti:
 
         self.time_vor_main = time.time()
         self.main()
-        # self.main(theta, x_total, x_sum, coms_lens, init_coms, dp_act_old, max_ld, max_diff, delta_p_act, delta_p_inact, top_ords)
+        # self.main(theta, x_total, x_sum, coms_lens, init_coms, dp_act_old, max_dif, delta_p_act, delta_p_inact, top_ords, nu_min)
 
     # Quelle:
     # https://www.geeksforgeeks.org/topological-sorting/#:~:text=Topological%20sorting%20for%20Directed%20Acyclic,4%202%203%201%200%E2%80%9D
@@ -201,7 +202,7 @@ class ContAppMulti:
         return stack
 
     # Quelle: http://www.gilles-bertrand.com/2014/03/dijkstra-algorithm-python-example-source-code-shortest-path.html
-    def dijkstra(self, graph, src, visited=[], distances={}, predecessors={}):
+    def dijkstra(self, graph, src, visited=[], distances={}, predecessors={}, exact=False):
         """
         Berechnet rekursiv kürzesten Weg und dessen Kosten von "src" zu jedem erreichbaren Knoten in "graph"
         :param graph: Graph als Dictionary
@@ -225,11 +226,15 @@ class ContAppMulti:
         # if it is the initial run, initializes the cost
         if not visited:
             distances[src] = 0
+        if exact:
+            cost = self.c_exact.copy()
+        else:
+            cost = self.c.copy()
         while True:
             # visit the neighbors
             for neighbor in graph[src]:
                 if neighbor not in visited:
-                    new_distance = distances[src] + self.c[self.E.index((neighbor,src))]
+                    new_distance = distances[src] + cost[self.E.index((neighbor,src))]
                     if new_distance < distances.get(neighbor,float('inf')):
                         distances[neighbor] = new_distance
                         predecessors[neighbor] = src
@@ -399,7 +404,7 @@ class ContAppMulti:
                 # x_sum_nz = 0
                 # cor = 0
                 for e_ind in delta_p_act[i][v_ind]:
-                    w_ind = self.V.index(self.E[e_ind][1])
+                    # w_ind = self.V.index(self.E[e_ind][1])
                     if e_ind not in argmin[i][v_ind]:
                     #if abs(a[i, v_ind] - self.g(e_ind, x_sum[e_ind]) / self.nu[e_ind] - a[i, w_ind]) > self.bd_tol * coms_lens[v_ind]:
                         # 'gx[i, e_ind]' = 0 muss gelten
@@ -429,7 +434,7 @@ class ContAppMulti:
         s_coo = s.tocoo()
         return set(zip(s_coo.row, s_coo.col))'''
 
-    def fp_approx(self, theta_ind, top_ords, delta_p_act):
+    def fp_approx(self, theta_ind, top_ords, delta_p_act, nu_min):
         theta = self.global_phase[-1]
         xk = scipy.sparse.lil_matrix((self.I, self.m))
         xfp = scipy.sparse.lil_matrix((self.I, self.m))
@@ -461,7 +466,7 @@ class ContAppMulti:
                 for v_ind in coms:
                     for i in coms[v_ind]:
                         if v_ind not in calc_v or i not in calc_v[v_ind]:
-                            for e_ind in delta_p_act_nf[i][v_ind]:
+                            for e_ind in delta_p_act[i][v_ind]:
                                 xk[i, e_ind] = xk_old[i, e_ind]
                                 x_sum[e_ind] += xk[i, e_ind]
 
@@ -482,7 +487,6 @@ class ContAppMulti:
                         x_sum[e_ind] += xk[i, e_ind]
                         flow_sent[i] += xk[i, e_ind]
                     for e_ind in bounds_f[v_ind][i]:
-                        #xk[i, e_ind] = 0.5 * (bounds[v_ind][i][e_ind][0] + bounds[v_ind][i][e_ind][1])
                         xk[i, e_ind] = xk_old[i, e_ind]
                         x_sum[e_ind] += xk[i, e_ind]
                     # in 2 Fällen muss korrigiert werden:
@@ -522,15 +526,17 @@ class ContAppMulti:
                 argmin.append({})
                 argmin_nf.append({})
                 for v_ind in top_ords[i]:
+                    a_e_min = 1
                     for e_ind in delta_p_act[i][v_ind]:
                         w_ind = self.V.index(self.E[e_ind][1])
                         a_e = self.g(e_ind, x_sum[e_ind] + x_sum_fix[e_ind]) / self.nu[e_ind] + a[i, w_ind]
-                        a_e_tol = (self.bd_tol * coms_lens[v_ind]) / self.nu[e_ind]
+                        a_e_tol = (self.bd_tol * coms_lens[v_ind]) / self.nu[e_ind] + (self.bd_tol * coms_lens[v_ind]) / a_e_min
                         if (i, v_ind) not in sparse_items:
                             if abs(a_e) > a_e_tol + self.eps:
                                 a[i, v_ind] = a_e
                             sparse_items.append((i, v_ind))
                             argmin[i][v_ind] = [e_ind]
+                            a_e_min = self.nu[e_ind]
                             if e_ind in delta_p_act_nf[i][v_ind]:
                                 argmin_nf[i][v_ind] = [e_ind]
                             else:
@@ -544,6 +550,7 @@ class ContAppMulti:
                                 else:
                                     a[i, v_ind] = 0
                                 argmin[i][v_ind] = [e_ind]
+                                a_e_min = self.nu[e_ind]
                                 if e_ind in delta_p_act_nf[i][v_ind]:
                                     argmin_nf[i][v_ind] = [e_ind]
                                 else:
@@ -554,12 +561,14 @@ class ContAppMulti:
                                     a[i, v_ind] = a_e
                                 else:
                                     a[i, v_ind] = 0
+                                a_e_min = self.nu[e_ind]
                                 argminiv = copy.deepcopy(argmin[i][v_ind])
                                 for e_arg in argminiv:
                                     a_e_arg = self.g(e_arg, x_sum[e_arg] + x_sum_fix[e_arg]) / self.nu[e_arg] + a[i, self.V.index(self.E[e_arg][1])]
+                                    a_e_tol = (self.bd_tol * coms_lens[v_ind]) / self.nu[e_arg] + (self.bd_tol * coms_lens[v_ind]) / a_e_min
                                     if a_e_arg > a[i, v_ind] + a_e_tol:
                                         argmin[i][v_ind].remove(e_arg)
-                                        if e_arg not in bounds_f[v_ind][i]:
+                                        if e_arg not in bounds_f[v_ind][i] and (i, e_arg) not in new_f:
                                             argmin_nf[i][v_ind].remove(e_arg)
                                         if a_e_arg < a_min2[i, v_ind]:
                                             a_min2[i, v_ind] = a_e_arg
@@ -593,7 +602,7 @@ class ContAppMulti:
                         # In diesem Fall sind alle aktiven nichtminimalen Kanten bereits fixiert. Damit können keine Fortschritte mehr gemacht werden -> relaxiere bds
                         relaxed.append((i, v_ind))
                         for e_ind in arg:
-                            if xk[i, e_ind] <= self.bd_tol * coms_lens[v_ind]:
+                            if xk[i, e_ind] < 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind]:  #  self.bd_tol * coms_lens[v_ind]:
                                 continue
                             w_ind = self.V.index(self.E[e_ind][1])
                             if self.q[e_ind] < self.eps:
@@ -609,7 +618,7 @@ class ContAppMulti:
                         # Dagegen sind in diesem Fall alle minimalen Kanten fixiert. Damit können ebenfalls keine Forschritte gemacht werden -> relaxiere bds
                         relaxed.append((i, v_ind))
                         for e_ind in argmin[i][v_ind]:
-                            if xk[i, e_ind] > self.b[i, v_ind] - self.bd_tol * coms_lens[v_ind]:
+                            if xk[i, e_ind] > self.b[i, v_ind] - 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind]:
                                 continue
                             w_ind = self.V.index(self.E[e_ind][1])
                             xe = x_sum[e_ind] + x_sum_fix[e_ind]
@@ -644,11 +653,11 @@ class ContAppMulti:
             def fix_check(v_ind):
                 delta_p_act_nf_pos_v = {}
                 for i in coms[v_ind]:
-                    delta_p_act_nf_pos_v[i] = [e_ind for e_ind in delta_p_act_nf[i][v_ind] if xk[i, e_ind] > self.bd_tol * coms_lens[v_ind]]
+                    delta_p_act_nf_pos_v[i] = [e_ind for e_ind in delta_p_act_nf[i][v_ind] if xk[i, e_ind] > 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind]]
                 # Prüfe, ob alle aktiven Kanten mit positivem Flusswert den gleichen a-Wert liefern
                 if np.all([v_ind not in argmin_nf[i] or np.all([e_ind in argmin_nf[i][v_ind] for e_ind in delta_p_act_nf_pos_v[i]]) for i in coms[v_ind]]):
                     # alle Kanten, für die ein Flusswert >0 fixiert wurde, müssen ebenfalls in 'argmin[i][v_ind]' liegen
-                    if np.any([[e_ind for e_ind in bounds_f[v_ind][i] if xk[i, e_ind] > self.bd_tol * coms_lens[v_ind] and e_ind not in argmin[i][v_ind]] for i in coms[v_ind]]):
+                    if np.any([[e_ind for e_ind in bounds_f[v_ind][i] if xk[i, e_ind] > 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind] and e_ind not in argmin[i][v_ind]] for i in coms[v_ind]]):
                         # sonst -> Abbruch
                         return False
                     """for i in coms[v_ind]:
@@ -676,9 +685,11 @@ class ContAppMulti:
                 if fix_check(v_ind):
                     for i in coms[v_ind]:
                         for e_ind in delta_p_act[i][v_ind]:
-                            if xk[i, e_ind] < self.bd_tol * coms_lens[v_ind]:
+                            if xk[i, e_ind] < 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind]:
+                                # 'xk[i, e_ind]' nur um Approximationsfehler von 0 verschieden
                                 xfp[i, e_ind] = 0
-                            elif xk[i, e_ind] > self.b[i, v_ind] - self.bd_tol * coms_lens[v_ind]:
+                            elif xk[i, e_ind] > self.b[i, v_ind] - 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind]:
+                                # 'xk[i, e_ind]' nur um Approximationsfehler von 'self.b[i, v_ind]' verschieden
                                 xfp[i, e_ind] = self.b[i, v_ind]
                                 x_sum_fix[e_ind] += xfp[i, e_ind]
                             else:
@@ -737,13 +748,16 @@ class ContAppMulti:
             for (i, v_ind) in fp_comp:
                 for e_ind in bounds[v_ind][i]:
                     if xk[i, e_ind] < self.bd_tol:  # ???
+                        # 'xk[i, e_ind]' nur um Approximationsfehler von 0 verschieden
                         xfp[i, e_ind] = 0
                     elif xk[i, e_ind] > self.b[i, v_ind] - self.bd_tol:
+                        # 'xk[i, e_ind]' nur um Approximationsfehler von 'self.b[i, v_ind]' verschieden
                         xfp[i, e_ind] = self.b[i, v_ind]
                         x_sum_fix[e_ind] += xfp[i, e_ind]
                     else:
                         xfp[i, e_ind] = xk[i, e_ind]
                         x_sum_fix[e_ind] += xfp[i, e_ind]
+                    x_sum[e_ind] -= xk[i, e_ind]
                 del bounds[v_ind][i]
                 del bounds_f[v_ind][i]
                 coms[v_ind].remove(i)
@@ -752,6 +766,9 @@ class ContAppMulti:
 
             if fp_comp:  # nur im 1. Schritt nicht erfüllt. In diesem wird x0 verwendet
                 if not coms:  # Abbruchbedingung: keine Güter mehr übrig, die noch auf Kanten aufgeteilt werden müssen
+                    # verbessere potentielle Approximationsfehler in 'a' durch erneuten Aufruf von 'calc_a'. Dies ist möglich, da eventuell in vorheriger 'for' - Schleife
+                    # Approximationsfehler in 'xk' verbessert wurden
+                    a, a_min2, argmin, argmin_nf = calc_a()
                     return xfp, x_sum_fix, a, argmin, init_coms, coms_lens
                 xk, x_sum = calc_flow_by_bounds(xk_old=xk)
 
@@ -765,6 +782,9 @@ class ContAppMulti:
             fix_nodes()
 
             if not coms:  # Abbruchbedingung: keine Güter mehr übrig, die noch auf Kanten aufgeteilt werden müssen
+                # verbessere potentielle Approximationsfehler in 'a' durch erneuten Aufruf von 'calc_a'. Dies ist möglich, da eventuell in vorherigem Aufruf von 'fix_nodes()'
+                # Approximationsfehler in 'xk' verbessert wurden
+                a, a_min2, argmin, argmin_nf = calc_a()
                 return xfp, x_sum_fix, a, argmin, init_coms, coms_lens
 
             while True:
@@ -781,12 +801,10 @@ class ContAppMulti:
                             else:
                                 # initiale untere Schranke: so, dass durch Verringerung von xk[i, e_ind] der für 'v_ind' minimale a_i - Wert erreicht werden kann
                                 bounds[v_ind][i][e_ind] = (np.max([0, xk[i, e_ind] + (a[i, v_ind] - a[i, self.V.index(self.E[e_ind][1])]) * self.nu[e_ind] - self.g(e_ind, x_sum[e_ind] + x_sum_fix[e_ind])]), xk[i, e_ind])
-                            bd_diff = abs(bounds[v_ind][i][e_ind][1] - bounds[v_ind][i][e_ind][0])
-                            if bd_diff < self.bd_tol:
-                                if bd_diff == 0 and xk[i, e_ind] > self.eps:
+                            bd_dif = abs(bounds[v_ind][i][e_ind][1] - bounds[v_ind][i][e_ind][0])
+                            if bd_dif < self.bd_tol:
+                                if bd_dif == 0 and xk[i, e_ind] > self.eps:
                                     # bd wird relaxiert
-                                    # !!! änderung: vorher nur:
-                                    # bounds[v_ind][i][e_ind] = (0.5 * xk[i, e_ind], xk[i, e_ind])
                                     w_ind = self.V.index(self.E[e_ind][1])
                                     if self.q[e_ind] < self.eps:
                                         # Falls q = 0 -> g_e nicht-negativ -> kleinster a-Wert kann nicht erreicht werden -> wähle kleinstmögliche untere Schranke: 0
@@ -810,12 +828,10 @@ class ContAppMulti:
                                 if self.q[e_ind] < self.eps and xe < self.nu[e_ind] - self.eps:
                                     x2 += self.nu[e_ind] - xe
                                 bounds[v_ind][i][e_ind] = (xk[i, e_ind], np.min([x2 + xk[i, e_ind], self.b[i, v_ind]]))
-                            bd_diff = abs(bounds[v_ind][i][e_ind][1] - bounds[v_ind][i][e_ind][0])
-                            if bd_diff < self.bd_tol:
-                                if bd_diff == 0 and xk[i, e_ind] < self.b[i, v_ind] - self.eps:
+                            bd_dif = abs(bounds[v_ind][i][e_ind][1] - bounds[v_ind][i][e_ind][0])
+                            if bd_dif < self.bd_tol:
+                                if bd_dif == 0 and xk[i, e_ind] < self.b[i, v_ind] - self.eps:
                                     # bd wird relaxiert
-                                    # !!! änderung: vorher nur:
-                                    # bounds[v_ind][i][e_ind] = (xk[i, e_ind], np.min([2 * xk[i, e_ind], self.b[i, v_ind]]))
                                     w_ind = self.V.index(self.E[e_ind][1])
                                     xe = x_sum[e_ind] + x_sum_fix[e_ind]
                                     x2 = (a_min2[i, v_ind] - a[i, w_ind]) * self.nu[e_ind] - self.g(e_ind, xe)
@@ -829,6 +845,7 @@ class ContAppMulti:
                                     new_f.append((i, e_ind))
 
                 xk, x_sum = calc_flow_by_bounds(xk_old=xk)
+
                 a, a_min2, argmin, argmin_nf = calc_a()
 
                 for (i, e_ind) in new_f:
@@ -840,8 +857,8 @@ class ContAppMulti:
                         delta_p_act_nf[i][v_ind] = []
                         bounds_f[v_ind][i].append(e_last)
                         b_nf[i, v_ind] -= xk[i, e_last]
-                    if b_nf[i, v_ind] < self.bd_tol * coms_lens[v_ind]:
-                        if np.all([e in argmin[i][v_ind] for e in bounds_f[v_ind][i] if xk[i, e] > self.bd_tol * coms_lens[v_ind]]):
+                    if b_nf[i, v_ind] < 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind]:
+                        if np.all([e in argmin[i][v_ind] for e in bounds_f[v_ind][i] if xk[i, e] > 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind]]):
                             if (i, v_ind) not in fp_comp:  # ???
                                 fp_comp.append((i, v_ind))
                         else:
@@ -857,8 +874,6 @@ class ContAppMulti:
                                         x2 += self.nu[e] - xe
                                     bounds[v_ind][i][e] = (xk[i, e], np.min([x2 + xk[i, e], self.b[i, v_ind]]))
                                 else:
-                                    # !!! nicht getestete Änderung: vorher einfach nur:
-                                    # bounds[v_ind][i][e] = (np.max([0, xk[i, e] + (a[i, v_ind] - a[i, self.V.index(self.E[e][1])]) * self.nu[e] - self.g(e, x_sum[e] + x_sum_fix[e])]), xk[i, e])
                                     if self.q[e] > self.eps:
                                         bounds[v_ind][i][e] = (np.max([0, xk[i, e] + (a[i, v_ind] - a[i, self.V.index(self.E[e][1])]) * self.nu[e] - self.g(e, x_sum[e] + x_sum_fix[e])]), xk[i, e])
                                     else:
@@ -879,9 +894,12 @@ class ContAppMulti:
 
                 if not coms:
                     # Abbruchbedingung: keine Güter mehr übrig, die noch auf Kanten aufgeteilt werden müssen
+                    # verbessere potentielle Approximationsfehler in 'a' durch erneuten Aufruf von 'calc_a'. Dies ist möglich, da eventuell in vorherigem Aufruf von 'fix_nodes()'
+                    # Approximationsfehler in 'xk' verbessert wurden
+                    a, a_min2, argmin, argmin_nf = calc_a()
                     return xfp, x_sum_fix, a, argmin, init_coms, coms_lens
 
-    def main(self, theta=None, x_total=None, x_sum=None, coms_lens=None, init_coms=None, dp_act_old=None, max_ld=None, max_diff=None, delta_p_act=None, delta_p_inact=None, top_ords=None):
+    def main(self, theta=None, x_total=None, x_sum=None, coms_lens=None, init_coms=None, dp_act_old=None, max_dif=None, delta_p_act=None, delta_p_inact=None, top_ords=None, nu_min=None):
         """
         Hauptteil: Konstruiert schrittweise einen kontinuierlichen IDE-Fluss zu den Eingabedaten aus 'Math.cont_data'.
         :return: 0
@@ -889,17 +907,15 @@ class ContAppMulti:
         if theta is None:
             theta = 0
             theta_ind = -1
-            max_ld = self.bd_tol * np.ones(self.n)
-            max_diff = 0
+            max_dif = self.bd_tol
             delta_p_act = []
             delta_p_inact = []
             top_ords = []
+            nu_min = scipy.sparse.lil_matrix((self.I, self.n))
         else:
             theta_ind = len(self.global_phase) - 2
         # Obergrenze für theta
         T = 100000
-        label_difs_act = scipy.sparse.lil_matrix((self.I, self.n))
-        # label_dif_sum = np.zeros(self.n)
         # inflow_lens = np.zeros(self.m)
         # flow_tol = np.ones(self.n)
         if theta == 0:
@@ -910,6 +926,8 @@ class ContAppMulti:
                 for v_ind in range(self.n):
                     delta_p_act[i][v_ind] = self.get_outgoing_active_edges(i, v_ind)
                     delta_p_inact[i][v_ind] = [e for e in self.delta_p[v_ind] if e not in delta_p_act[i][v_ind]]
+                    if delta_p_act[i][v_ind]:
+                        nu_min[i, v_ind] = np.min([self.nu[e] for e in delta_p_act[i][v_ind]])
                     self.b[i, v_ind] = self.calc_b(i, v_ind, theta)
                 # berechne top. Sortierung für aktive Kanten von Gut 'i'
                 top_ords.append(self.topologicalSort(i, delta_p_act[i]))
@@ -925,11 +943,13 @@ class ContAppMulti:
             # Liste aller Kanten, deren Warteschlange in der aktuellen Phase 0 wird, und deren f^- -Werte auf 0
             # gesetzt werden müssen
             fm_to_zero = {}
-            # 'next_phase' bestimmt am Ende der Schleife, wie lange aktuelle Phase andauert
+            # 'next_phase' enthält Zeitpunkte, die relevant sind für Schrittweitenwahl
             if start_points:
-                next_phase = [np.min(start_points) - theta]
+                next_sp = np.min(start_points)
+                next_phase = [next_sp - theta]
             else:
                 next_phase = [T]
+                next_sp = np.Inf
             skip_calcs = False
             if theta > 0:
                 old_b = copy.deepcopy(self.b)
@@ -949,15 +969,17 @@ class ContAppMulti:
                     for i in range(self.I):
                         argmin.append({})
                         for v_ind in top_ords[i]:
+                            a_e_min = 1
                             for e_ind in delta_p_act[i][v_ind]:
                                 w_ind = self.V.index(self.E[e_ind][1])
                                 a_e = self.g(e_ind, x_sum[e_ind]) / self.nu[e_ind] + a[i, w_ind]
-                                a_e_tol = (self.bd_tol * coms_lens[v_ind]) / self.nu[e_ind]
+                                a_e_tol = (self.bd_tol * coms_lens[v_ind]) / self.nu[e_ind] + (self.bd_tol * coms_lens[v_ind]) / a_e_min
                                 if (i, v_ind) not in sparse_items:
                                     if abs(a_e) > a_e_tol + self.eps:
                                         a[i, v_ind] = a_e
                                     sparse_items.append((i, v_ind))
                                     argmin[i][v_ind] = [e_ind]
+                                    a_e_min = self.nu[e_ind]
                                 elif a_e < a[i, v_ind] + a_e_tol:
                                     if a_e < a[i, v_ind] - a_e_tol:
                                         if abs(a_e) > a_e_tol + self.eps:
@@ -965,14 +987,17 @@ class ContAppMulti:
                                         else:
                                             a[i, v_ind] = 0
                                         argmin[i][v_ind] = [e_ind]
+                                        a_e_min = self.nu[e_ind]
                                     elif a_e < a[i, v_ind]:
                                         if abs(a_e) > a_e_tol + self.eps:
                                             a[i, v_ind] = a_e
                                         else:
                                             a[i, v_ind] = 0
+                                        a_e_min = self.nu[e_ind]
                                         argminiv = copy.deepcopy(argmin[i][v_ind])
                                         for e_arg in argminiv:
                                             a_e_arg = self.g(e_arg, x_sum[e_arg]) / self.nu[e_arg] + a[i, self.V.index(self.E[e_arg][1])]
+                                            a_e_tol = (self.bd_tol * coms_lens[v_ind]) / self.nu[e_arg] + (self.bd_tol * coms_lens[v_ind]) / a_e_min
                                             if a_e_arg > a[i, v_ind] + a_e_tol:
                                                 argmin[i][v_ind].remove(e_arg)
                                         argmin[i][v_ind].append(e_ind)
@@ -983,8 +1008,8 @@ class ContAppMulti:
                     for v_ind in init_coms:
                         dpact_pos_flow[v_ind] = {}
                         for i in init_coms[v_ind]:
-                            dpact_pos_flow[v_ind][i] = [e_ind for e_ind in delta_p_act[i][v_ind] if x_total[i, e_ind] > self.bd_tol * coms_lens[v_ind]]
-                            if np.any([e_ind not in dpact_pos_flow[v_ind][i] for e_ind in dp_act_old[i][v_ind] if x_total[i, e_ind] > self.bd_tol * coms_lens[v_ind]]):
+                            dpact_pos_flow[v_ind][i] = [e_ind for e_ind in delta_p_act[i][v_ind] if x_total[i, e_ind] > self.eps]
+                            if np.any([e_ind not in dpact_pos_flow[v_ind][i] for e_ind in dp_act_old[i][v_ind] if x_total[i, e_ind] > self.eps]):
                                 no_skip = True
                                 break
                         if no_skip:
@@ -996,11 +1021,11 @@ class ContAppMulti:
                         skip_count += 1
                         print("SKIP", theta_ind, theta)
                     else:
-                        x_total, x_sum, a, argmin, init_coms, coms_lens = self.fp_approx(theta_ind, top_ords, delta_p_act)
+                        x_total, x_sum, a, argmin, init_coms, coms_lens = self.fp_approx(theta_ind, top_ords, delta_p_act, nu_min)
                 else:
-                    x_total, x_sum, a, argmin, init_coms, coms_lens = self.fp_approx(theta_ind, top_ords, delta_p_act)
+                    x_total, x_sum, a, argmin, init_coms, coms_lens = self.fp_approx(theta_ind, top_ords, delta_p_act, nu_min)
             else:
-                 x_total, x_sum, a, argmin, init_coms, coms_lens = self.fp_approx(theta_ind, top_ords, delta_p_act)
+                 x_total, x_sum, a, argmin, init_coms, coms_lens = self.fp_approx(theta_ind, top_ords, delta_p_act, nu_min)
 
             delta_c = []
             for v_ind in range(self.n):
@@ -1013,11 +1038,12 @@ class ContAppMulti:
                     for e_ind in delta_p_act[ti][v_ind]:
                         if not skip_calcs:  # 'fp' bleibt gleich
                             if theta == 0:
-                                if x_total[ti, e_ind] > self.bd_tol:
+                                if x_total[ti, e_ind] > self.eps:
                                     self.fp[ti][e_ind][0] = (0, x_total[ti, e_ind])
                                     self.fp_ind[ti][e_ind].append(0)
                             # falls sich f^+ -Wert in dieser Phase ändert, aktualisiere 'self.fp'
-                            elif abs(self.fp[ti][e_ind][-1][1] - x_total[ti, e_ind]) > 2 * self.bd_tol * coms_lens[v_ind]:
+                            # !!! Vergleichen hier zwei unterschiedliche Zeitpunkte. Deswegen 'nu_min[ti, v_ind]' nicht ganz korrekt, eher min. Kapazität über alle ausgehenden Kanten!? (nicht nur aktive)
+                            elif abs(self.fp[ti][e_ind][-1][1] - x_total[ti, e_ind]) > 4 * self.bd_tol * self.I / nu_min[ti, v_ind]:
                                 self.fp[ti][e_ind].append((theta, x_total[ti, e_ind]))
                                 self.fp_ind[ti][e_ind].append(theta_ind)
                                 if self.q_ind[e_ind][-1] != theta_ind and (self.q[e_ind] > self.eps or self.q_global[e_ind][-1] > self.eps or x_sum[e_ind] > self.nu[e_ind]):
@@ -1037,26 +1063,27 @@ class ContAppMulti:
                                 outflow = self.nu[e_ind] * flow_ratio
                         fm_ind = self.last_fm_change(ti, e_ind, outflow_time)
                         # falls sich f_{ti}^- -Wert durch die Flussaufteilung in dieser Phase ändert, aktualisiere 'self.fm'
-                        if abs(self.fm[ti][e_ind][fm_ind][1] - outflow) > self.bd_tol * 2 * coms_lens[v_ind]:
-                            # ???? braucht man das überhaupt noch?
-                            if abs(self.fm[ti][e_ind][fm_ind][0] - outflow_time) < self.I * self.bd_tol:
+                        # !!! Vergleichen hier zwei unterschiedliche Zeitpunkte. Deswegen 'nu_min[ti, v_ind]' nicht ganz korrekt, eher min. Kapazität über alle ausgehenden Kanten!? (nicht nur aktive)
+                        if abs(self.fm[ti][e_ind][fm_ind][1] - outflow) > 4 * self.bd_tol * self.I / nu_min[ti, v_ind]:
+                            # !!!
+                            if abs(self.fm[ti][e_ind][fm_ind][0] - outflow_time) < self.eps:  # self.I * self.bd_tol:
+                                # zuvor berechneter 'outflow' kann sich durch Änderung der Flusswerte verzögern
                                 del self.fm[ti][e_ind][fm_ind]
                             else:
                                 self.fm[ti][e_ind].append((outflow_time, outflow))
-            max_diff_tol = np.max([self.bd_tol, max_diff])
             for ti in range(self.I):
                 # überspringen jeweilige Senke, da diese hier uninteressant
                 for v_ind in top_ords[ti][1:]:
                     for e_ind in delta_p_act[ti][v_ind]:
                         last_fm_ind = self.last_fm_change(ti, e_ind, theta)
                         # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
-                        if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and self.I * self.bd_tol < self.fm[ti][e_ind][last_fm_ind + 1][0] - theta < next_phase[0] + max_diff_tol:
+                        if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and self.eps < self.fm[ti][e_ind][last_fm_ind + 1][0] - theta < next_phase[0] + max_dif + self.bd_tol * coms_lens[v_ind] * next_phase[0] / self.nu[e_ind]:
                             next_fm = self.fm[ti][e_ind][last_fm_ind + 1][0] - theta
                             if next_fm < next_phase[0]:
                                 nph_rev = copy.deepcopy(next_phase)
                                 nph_rev.reverse()
                                 for p in nph_rev:
-                                    if p > next_fm + max_diff_tol:
+                                    if p > next_fm + max_dif + self.bd_tol * coms_lens[v_ind] * next_fm / self.nu[e_ind]:
                                         next_phase.pop()
                                         if p in fm_to_zero:
                                             # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
@@ -1086,18 +1113,20 @@ class ContAppMulti:
                                     outflow_time = theta + self.r[e_ind]
                                 fm_ind = self.last_fm_change(ti, e_ind, outflow_time)
                                 # setze 'self.fm'- Wert auf 0, falls dies noch nicht geschehen ist
-                                if abs(self.fm[ti][e_ind][fm_ind][1]) > self.I * self.bd_tol:
+                                #!!!
+                                if abs(self.fm[ti][e_ind][fm_ind][1]) > 0:
+                                    # if abs(self.fm[ti][e_ind][fm_ind][1]) > self.I * self.bd_tol:
                                     self.fm[ti][e_ind].append((outflow_time, 0))
 
                         # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
                         last_fm_ind = self.last_fm_change(ti, e_ind, theta)
-                        if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and self.I * self.bd_tol < self.fm[ti][e_ind][last_fm_ind + 1][0] - theta < next_phase[0] + max_diff_tol:
+                        if len(self.fm[ti][e_ind]) > last_fm_ind + 1 and self.eps < self.fm[ti][e_ind][last_fm_ind + 1][0] - theta < next_phase[0] + max_dif + self.bd_tol * coms_lens[v_ind] * next_phase[0] / self.nu[e_ind]:
                             next_fm = self.fm[ti][e_ind][last_fm_ind + 1][0] - theta
                             if next_fm < next_phase[0]:
                                 nph_rev = copy.deepcopy(next_phase)
                                 nph_rev.reverse()
                                 for p in nph_rev:
-                                    if p > next_fm + max_diff_tol:
+                                    if p > next_fm + max_dif + self.bd_tol * coms_lens[v_ind] * next_fm / self.nu[e_ind]:
                                         next_phase.pop()
                                         if p in fm_to_zero:
                                             # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
@@ -1124,7 +1153,12 @@ class ContAppMulti:
                             # prüfe, wann inaktive Kanten unter momentanem Einfluss aktiv werden
                             tar_ind = self.V.index(self.E[e_ind][1])
                             act_ind = self.V.index(self.E[active_ind][1])
-                            np_tol = np.max([self.bd_tol, self.bd_tol * coms_lens[v_ind] * next_phase[0]])
+                            # np_tol_alt = np.max([self.bd_tol, self.bd_tol * coms_lens[v_ind] * next_phase[0]])
+                            dec_rate = self.g(active_ind, x_sum[active_ind]) / self.nu[active_ind] + a[ti, act_ind] - self.g(e_ind, x_sum[e_ind]) / self.nu[e_ind] - a[ti, tar_ind]
+                            if dec_rate < 2 * self.bd_tol * coms_lens[v_ind] / nu_min[ti, v_ind] + self.eps:
+                                # Kante wird sicher nicht aktiv
+                                continue
+                            np_tol = max_dif + (self.bd_tol * coms_lens[v_ind] * next_phase[0] / self.nu[active_ind] + self.bd_tol * coms_lens[v_ind] * next_phase[0] / self.nu[e_ind]) / dec_rate
 
                             if self.labels[ti][tar_ind] + self.q[e_ind]/self.nu[e_ind] + self.r[e_ind] + \
                                     (delta_c[e_ind] + a[ti, tar_ind]) * (next_phase[0] + np_tol) < \
@@ -1139,8 +1173,9 @@ class ContAppMulti:
                                 if time_ub < next_phase[0]:
                                     nph_rev = copy.deepcopy(next_phase)
                                     nph_rev.reverse()
+                                    np_tol = max_dif + (self.bd_tol * coms_lens[v_ind] * time_ub / self.nu[active_ind] + self.bd_tol * coms_lens[v_ind] * time_ub / self.nu[e_ind]) / dec_rate
                                     for p in nph_rev:
-                                        if p > time_ub + np.max([self.bd_tol * coms_lens[v_ind] * time_ub, max_diff]):
+                                        if p > time_ub + np_tol:
                                             next_phase.pop()
                                             if p in fm_to_zero:
                                                 # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
@@ -1163,13 +1198,14 @@ class ContAppMulti:
                     if change_of_q < -self.eps:
                         # 'phase_length': Dauer bis Warteschlangenlänge gleich 0
                         phase_length = - self.q[e_ind] / change_of_q
-                        np_tol = np.max([self.bd_tol, self.bd_tol * coms_lens[v_ind] * next_phase[0] + max_diff / (-change_of_q + self.bd_tol * coms_lens[v_ind])])
-                        if phase_length < next_phase[0] + np_tol:
+                        q_tol = max_dif + self.bd_tol * coms_lens[v_ind] * next_phase[0] / - change_of_q
+                        if phase_length < next_phase[0] + q_tol:
                             if phase_length < next_phase[0]:
                                 nph_rev = copy.deepcopy(next_phase)
                                 nph_rev.reverse()
                                 for p in nph_rev:
-                                    if p > phase_length + np_tol:
+                                    q_tol = max_dif + self.bd_tol * coms_lens[v_ind] * phase_length / - change_of_q
+                                    if p > phase_length + q_tol:
                                         next_phase.pop()
                                         if p in fm_to_zero:
                                             # wird zurückgesetzt, da durch Verkürzung der Phase der f^- -Wert erst in einer späteren Phase neu gesetzt wird
@@ -1195,7 +1231,7 @@ class ContAppMulti:
 
             if not skip_calcs and theta_ind > 0:
                 for e_ind in range(self.m):
-                    if np.any([theta_ind in self.fp_ind[i][e_ind] for i in range(self.I)]) and (self.q[e_ind] > self.eps or self.q_global[e_ind][-1] > self.eps or x_sum[e_ind] > self.nu[e_ind]):
+                    if np.any([theta_ind in self.fp_ind[i][e_ind] for i in range(self.I)]) and (self.q[e_ind] > self.eps or self.q_global[e_ind][-1] > self.eps or x_sum[e_ind] > self.nu[e_ind] + self.eps):
                         self.q_global[e_ind].append(self.q[e_ind])
 
             """for v_ind in range(self.n):
@@ -1205,15 +1241,22 @@ class ContAppMulti:
                         if inflow_lens[e_ind] > flow_tol[v_ind]:
                             flow_tol[v_ind] = inflow_lens[e_ind]"""
 
-            theta += next_phase[-1]
-            if next_phase[-1] != T:
+            alpha = (next_phase[-1] + next_phase[0]) / 2
+            if next_sp - theta - alpha < alpha - next_phase[0] + self.eps:
+                # Ausnahme bei der Schrittweitenwahl: Zeitpunkte mit Änderungen der externen Einflussraten dürfen nicht durch einen früheren Zeitpunkt approximiert werden, da sie
+                # sonst übersprungen werden
+                alpha = next_sp - theta
+            theta += alpha
+            if alpha != T:
                 # aktualisiere Warteschlangenlängen und Kosten
                 new_q = []
                 for v_ind in range(self.n):
-                    q_tol = np.max([self.bd_tol, self.bd_tol * coms_lens[v_ind] * next_phase[-1]])
+                    q_len_tol = np.max([self.bd_tol, self.bd_tol * coms_lens[v_ind] * alpha])
                     for e_ind in self.delta_p[v_ind]:
-                        next_q_len = self.q[e_ind] + self.g(e_ind, x_sum[e_ind]) * next_phase[-1]
-                        if next_q_len < q_tol:
+                        ge_x = self.g(e_ind, x_sum[e_ind])
+                        next_q_len = self.q[e_ind] + ge_x * alpha
+                        self.c_exact[e_ind] += ge_x * alpha / self.nu[e_ind]
+                        if next_q_len < q_len_tol:
                             next_q_len = 0
                             if self.q[e_ind] > self.eps:
                                 self.q_global[e_ind].append(0)
@@ -1230,64 +1273,60 @@ class ContAppMulti:
                 qi = []
                 for e_ind in range(self.m):
                     qi.append({})
-                label_difs = scipy.sparse.lil_matrix((self.I, self.m))
-                max_diff = max([max_ld[v] for v in range(self.n)])
                 for i in range(self.I):
                     for v_ind in range(self.n):
-                        self.labels[i][v_ind] = self.labels[i][v_ind] + next_phase[-1] * a[i, v_ind]
+                        self.labels[i][v_ind] += alpha * a[i, v_ind]
                     # etwas effizienter als 'v_ind in range(self.n)', da t_i übersprungen wird. Aber: 'top_ords[i]' hier keine aktuelle top. Sortierung mehr
                     for v_ind in top_ords[i][1:]:
                         if np.isinf(self.labels[i][v_ind]):
                             continue
-                        #dv_act = []
                         for edge in self.delta_p[v_ind]:
                             w_ind = self.V.index(self.E[edge][1])
-                            label_difs[i, edge] = self.labels[i][v_ind] - self.labels[i][w_ind] - self.c[edge]
-                            if label_difs[i, edge] > 0 or abs(label_difs[i, edge]) < max_diff + self.bd_tol or abs(label_difs[i, edge]) < 2 * max_diff + 2 * self.I * self.bd_tol * next_phase[-1]:
-                                # 'label_dif' > 0: geschieht nur aufgrund von Approximationsfehlern, für Kanten die aktiv sein sollten
+                            label_dif = self.labels[i][v_ind] - self.labels[i][w_ind] - self.c[edge]
+                            if label_dif > -(max_dif + 2 * self.bd_tol * coms_lens[v_ind] / nu_min[i, v_ind] * alpha):
+                                # 'label_difs[i, edge]' > 0: geschieht nur aufgrund von Approximationsfehlern, für Kanten die aktiv sein sollten
                                 self.E_active[i, edge] = 1
-                                #dv_act.append(edge)
-                        """if len(dv_act) == 0:
-                            print()"""
 
-                '''l_star = []
-                l_max = []
-                l_min = []
+                l_star = []
                 for i in range(self.I):
                     err_i = 0
                     err_i_rel = 0
-                    l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}))
-                    l_max.append(0)
-                    l_min.append(0)
+                    l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
+                    l_max = 0
+                    l_min = 0
                     for v_ind in range(self.n):
                         if self.b[i, v_ind] > 0:
                             l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
-                            if l_diff > l_max[-1]:
-                                l_max[-1] = l_diff
-                            elif l_diff < l_min[-1]:
-                                l_min[-1] = l_diff
+                            if l_diff > l_max:
+                                l_max = l_diff
+                            elif l_diff < l_min:
+                                l_min = l_diff
                             #delta_p_v_act = self.get_outgoing_active_edges(i, v_ind)
                             if len(delta_p_act[i][v_ind]) == 1:
                                 continue
                             vmax = -np.Inf
                             vmin = np.Inf
                             for e_ind in delta_p_act[i][v_ind]:
-                                if self.fp[i][e_ind][-1][1] > 0:
-                                    w_ind = self.V.index(self.E[e_ind][1])
-                                    val = self.labels[i][w_ind] + self.c[e_ind]
-                                    if val > vmax:
-                                        vmax = val
-                                    if val < vmin:
-                                        vmin = val
+                                w_ind = self.V.index(self.E[e_ind][1])
+                                val = self.labels[i][w_ind] + self.c[e_ind]
+                                if self.fp[i][e_ind][-1][1] > 0 and val > vmax:
+                                    vmax = val
+                                if val < vmin:
+                                    vmin = val
                             err_i += vmax - vmin
                             err_i_rel += (vmax - vmin) / self.b[i, v_ind]
+                    if err_i < self.eps:
+                        err_i = 0
+                        err_i_rel = 0
                     s_err[i].append((theta, err_i))
                     s_err_rel[i].append((theta, err_i_rel))
-                    l_err_max[i].append((theta, l_max[-1]))
-                    l_err_min[i].append((theta, l_min[-1]))'''
-                """with open('output_examples/bsp2_errors-6.txt', 'ab') as f:
+                    l_err_max[i].append((theta, l_max))
+                    l_err_min[i].append((theta, l_min))
+                """with open('output_examples/new_bsp2_errors-5.txt', 'ab') as f:
                     pickle.dump(s_err, f)
                     pickle.dump(s_err_rel, f)
+                    pickle.dump(l_err_max, f)
+                    pickle.dump(l_err_min, f)
                     f.close()"""
 
                 dp_act_old = copy.deepcopy(delta_p_act)
@@ -1297,46 +1336,23 @@ class ContAppMulti:
                         delta_p_inact[i][v_ind] = [e for e in self.delta_p[v_ind] if e not in delta_p_act[i][v_ind]]
                     # berechne top. Sortierung zur aktualisierten Menge aktiver Kanten für Gut 'i'
                     top_ords[i] = self.topologicalSort(i, delta_p_act[i])
+
+                for i in range(self.I):
                     for v_ind in top_ords[i][1:]:
                         if np.isinf(self.labels[i][v_ind]):
                             continue
-                        """len_dpaiv = len(delta_p_act[i][v_ind])
-                        if len_dpaiv == 1:
-                            # labels werden angepasst, damit diese durch Approximationsfehler nicht zu stark auseinanderdriften.
-                            e = self.E[delta_p_act[i][v_ind][0]]
-                            w_ind = self.V.index(e[1])
-                            #labelvor = self.labels[i][v_ind]
-                            self.labels[i][w_ind] = self.labels[i][v_ind] - self.c[delta_p_act[i][v_ind][0]]
-                            if self.labels[i][w_ind] < self.bd_tol * flow_tol[v_ind]:
-                                self.labels[i][w_ind] = 0
-                            #self.labels[i][v_ind] = self.labels[i][w_ind] + self.c[delta_p_act[i][v_ind][0]]
-                            #labelnach = self.labels[i][v_ind]
-                            #qi[dv_act[v_ind][0]][i] = self.q[dv_act[v_ind][0]]
-                        elif len_dpaiv > 1:
-                            #l_sum = 0"""
-
-                        for e_ind in delta_p_act[i][v_ind]:
-                            w_ind = self.V.index(self.E[e_ind][1])
-                            label_dif = self.labels[i][v_ind] - self.labels[i][w_ind] - self.c[e_ind]
-                            if abs(label_dif) > label_difs_act[i, v_ind]:
-                                # label_dif_sum[v_ind] += abs(label_dif) - label_difs_act[i, v_ind]
-                                label_difs_act[i, v_ind] = abs(label_dif)
-                                if label_difs_act[i, v_ind] > max_ld[v_ind]:
-                                    max_ld[v_ind] = label_difs_act[i, v_ind]
-
                         ell_sum = 0
                         for e_ind in delta_p_act[i][v_ind]:
                             w_ind = self.V.index(self.E[e_ind][1])
                             ell_sum += self.labels[i][w_ind] + self.c[e_ind]
                         self.labels[i][v_ind] = ell_sum / len(delta_p_act[i][v_ind])
-                        if self.labels[i][v_ind] < label_difs_act[i, v_ind]:  # ???
+                        if self.labels[i][v_ind] < max_dif:  # ?
                             self.labels[i][v_ind] = 0
-
                         for e_ind in delta_p_act[i][v_ind]:
                             w_ind = self.V.index(self.E[e_ind][1])
-                            # 'qi[e_ind][i]': Warteschlangenlönge von Kante 'e_ind', passend zu den labels von Gut 'i'
+                            # 'qi[e_ind][i]': Warteschlangenlänge von Kante 'e_ind', passend zu den labels von Gut 'i'
                             qi[e_ind][i] = (self.labels[i][v_ind] - self.labels[i][w_ind] - self.r[e_ind]) * self.nu[e_ind]
-                            if qi[e_ind][i] < label_difs_act[i, v_ind] * self.nu[e_ind] + self.eps:
+                            if qi[e_ind][i] < max_dif * self.nu[e_ind] + self.eps:
                                 qi[e_ind][i] = 0
 
                 for e_ind in range(self.m):
@@ -1349,53 +1365,61 @@ class ContAppMulti:
                         self.q[e_ind] = mean_qi
                         self.c[e_ind] = self.q[e_ind] / self.nu[e_ind] + self.r[e_ind]
 
+                for i in range(self.I):
+                    for v_ind in range(self.n):
+                        for e_ind in delta_p_act[i][v_ind]:
+                            w_ind = self.V.index(self.E[e_ind][1])
+                            label_dif = abs(self.labels[i][v_ind] - self.labels[i][w_ind] - self.c[e_ind])
+                            if label_dif > max_dif:
+                                max_dif = label_dif
+
                 for p in fm_to_zero:
                     for e_ind in fm_to_zero[p]:
                         for i in range(self.I):
                             if self.fm[i][e_ind][-1][1] > self.eps:
                                 self.fm[i][e_ind].append((theta + self.r[e_ind], 0))
 
-                '''l_star = []
-                l_max = []
-                l_min = []
+                l_star = []
                 for i in range(self.I):
                     err_i = 0
                     err_i_rel = 0
-                    l_max.append(0)
-                    l_min.append(0)
-                    l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}))
+                    l_max = 0
+                    l_min = 0
+                    l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
                     for v_ind in range(self.n):
                         if self.b[i, v_ind] > 0:
                             l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
-                            if l_diff > l_max[-1]:
-                                l_max[-1] = l_diff
-                            elif l_diff < l_min[-1]:
-                                l_min[-1] = l_diff
+                            if l_diff > l_max:
+                                l_max = l_diff
+                            elif l_diff < l_min:
+                                l_min = l_diff
                             #delta_p_v_act = self.get_outgoing_active_edges(i, v_ind)
                             if len(dp_act_old[i][v_ind]) == 1:
                                 continue
                             vmax = -np.Inf
                             vmin = np.Inf
                             for e_ind in dp_act_old[i][v_ind]:
-                                if self.fp[i][e_ind][-1][1] > 0:
-                                    w_ind = self.V.index(self.E[e_ind][1])
-                                    val = self.labels[i][w_ind] + self.c[e_ind]
-                                    if val > vmax:
-                                        vmax = val
-                                    if val < vmin:
-                                        vmin = val
+                                w_ind = self.V.index(self.E[e_ind][1])
+                                val = self.labels[i][w_ind] + self.c[e_ind]
+                                if self.fp[i][e_ind][-1][1] > 0 and val > vmax:
+                                    vmax = val
+                                if val < vmin:
+                                    vmin = val
                             err_i += vmax - vmin
                             err_i_rel += (vmax - vmin) / self.b[i, v_ind]
+                    if err_i < self.eps:
+                        err_i = 0
+                        err_i_rel = 0
                     s_err[i].append((theta, err_i))
                     s_err_rel[i].append((theta, err_i_rel))
-                    l_err_max[i].append((theta, l_max[-1]))
-                    l_err_min[i].append((theta, l_min[-1]))'''
-                with open('output_examples/bsp2_errors-5.txt', 'ab') as f:
-                    #pickle.dump(s_err, f)
-                    #pickle.dump(s_err_rel, f)
-                    #pickle.dump(l_err_max, f)
-                    #pickle.dump(l_err_min, f)
-                    f.close()
+                    l_err_max[i].append((theta, l_max))
+                    l_err_min[i].append((theta, l_min))
+                """with open('output_examples/bsp2_errors-5.txt', 'ab') as f:
+                    pickle.dump(s_err, f)
+                    pickle.dump(s_err_rel, f)
+                    pickle.dump(l_err_max, f)
+                    pickle.dump(l_err_min, f)
+                    f.close()"""
 
         """for i in range(self.I):
             # am Ende sind alle f^+ -Werte 0
@@ -1488,7 +1512,7 @@ class ContAppMulti:
         print(timediff2)
         print(timediff2)
 
-        """with open('output_examples/holzkirchen_komplett-8.txt', 'ab') as f:
+        """with open('output_examples/new_holzkirchen_komplett-8.txt', 'ab') as f:
             pickle.dump(self.fp, f)
             pickle.dump(self.fm, f)
             pickle.dump(self.q_global, f)
@@ -1496,7 +1520,7 @@ class ContAppMulti:
             pickle.dump(self.global_phase, f)
             f.close()"""
 
-        """with open('output_examples/holzkirchen05-8.txt', 'ab') as f:
+        """with open('output_examples/new_no_term40-5.txt', 'ab') as f:
             pickle.dump(self.fp, f)
             pickle.dump(self.fm, f)
             pickle.dump(self.q_global, f)
@@ -1513,14 +1537,14 @@ class ContAppMulti:
             pickle.dump(coms_lens, f)
             pickle.dump(init_coms, f)
             pickle.dump(dp_act_old, f)
-            pickle.dump(max_ld, f)
-            pickle.dump(max_diff, f)
+            pickle.dump(max_dif, f)
             pickle.dump(delta_p_act, f)
             pickle.dump(delta_p_inact, f)
             pickle.dump(top_ords, f)
+            pickle.dump(nu_min, f)
             f.close()"""
 
-        """with open('output_examples/no_term250-6.txt', 'ab') as f:
+        """with open('output_examples/no_term250-5.txt', 'ab') as f:
             pickle.dump(self.fp, f)
             pickle.dump(self.fm, f)
             pickle.dump(self.q_global, f)
