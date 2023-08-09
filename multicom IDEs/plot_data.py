@@ -14,7 +14,7 @@ def loadall(filename):
 
 s_err = [[], []]
 s_err_rel = [[], []]
-items = loadall('output_examples/holzkirchen_errors2pt5-8.txt')
+items = loadall('output_examples/holzkirchen_final_err5-8.txt')
 for (no, item) in enumerate(items):
     it = item.copy()
     if no % 2:
@@ -49,7 +49,8 @@ for t in range(len(s_times0)):
     rel_err.append(s_vals_rel0[t] + s_vals_rel1[t])
 #plt.plot(s_times0, total_err, 'k')
 fig, axs = plt.subplots(2)
-# fig.suptitle('Vertically stacked subplots')
+#fig.set_figheight(6)
+#fig.set_figwidth(8)
 
 axs[0].yaxis.set_major_formatter(formatter)
 axs[1].yaxis.set_major_formatter(formatter)
@@ -66,9 +67,9 @@ for ind in range(0, len_s_err, 2):
     axs[1].plot(s_times0[ind:ind+2], rel_err[ind:ind+2], 'c:')
 
 axs[1].legend(['absolut', 'relativ'])
-axs[0].set(ylabel='Fehler', ylim=(0, 1.2 * 10**(-8)), xlim=(0, 2.2), xticks=[0.135, 0.389, 0.48433, 0.5925, 0.731, 1.433, 1.56233, 1.723, 1.99333])
+axs[0].set(ylabel='maximaler IDE-Fehler', ylim=(0, 1.2 * 10**(-8)), xlim=(0, 2.2), xticks=[0.135, 0.389, 0.48433, 0.5925, 0.731, 1.433, 1.56233, 1.723, 1.99333])
 plt.setp(axs[0].get_xticklabels(), rotation=40, horizontalalignment='right', fontsize='x-small')
-axs[1].set(xlabel='Zeit', ylabel='Fehler', ylim=(0, 1.2 * 10**(-8)), xlim=(0, 2.2), xticks=[0.135, 0.389, 0.48433, 0.54526, 0.647, 0.7474, 1.433, 1.56233, 1.723, 1.99333])
+axs[1].set(xlabel='Zeit', ylabel='IDE-Gesamtfehler', ylim=(0, 1.7 * 10**(-8)), xlim=(0, 2.2), xticks=[0.135, 0.389, 0.48433, 0.54526, 0.647, 0.7474, 1.433, 1.56233, 1.723, 1.99333])
 plt.setp(axs[1].get_xticklabels(), rotation=40, horizontalalignment='right', fontsize='x-small')
 fig.tight_layout()
 plt.show()

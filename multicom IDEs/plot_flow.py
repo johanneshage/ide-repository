@@ -15,7 +15,7 @@ def loadall(filename):
 
 s_err = [[], []]
 s_err_rel = [[], []]
-items = loadall('output_examples/holzkirchen_komplett-8.txt')
+items = loadall('output_examples/new_holzkirchen_komplett-8.txt')
 for (no, item) in enumerate(items):
     if no == 0:
         fp = item.copy()
@@ -30,7 +30,6 @@ rel_fps1[0].append(fp[0][5597])
 rel_fps1[1] = [fp[1][5595]]
 rel_fps1[1].append(fp[1][5596])
 rel_fps1[1].append(fp[1][5597])
-
 
 
 formatter = ticker.ScalarFormatter(useMathText=False)
@@ -146,7 +145,7 @@ fig.set_figheight(6)
 axs[0].hlines(s_vals095, s_times095, s_end_times095, colors='r')
 axs[0].vlines(nz_times095, [0] + nz_vals095, nz_vals095[1:] + [0], colors='r', linestyles='dotted')
 axs[0].hlines(s_vals195, s_times195, s_end_times195, colors='b')
-axs[0].vlines(nz_times195, [0] + nz_vals195, nz_vals195[1:] + [0], colors='b', linestyles='dotted')
+axs[0].vlines(nz_times195, nz_vals195, nz_vals195[1:] + [0], colors='b', linestyles='dotted')
 axs[0].scatter(nz_times0952 + [nz_times095[-1]], nz_vals0952 + [0], color='r', marker='.')
 axs[0].scatter(nz_times1952[1:] + [nz_times195[-1]], nz_vals1952[1:] + [0], color='b', marker='.')
 
