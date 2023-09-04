@@ -49,10 +49,10 @@ class OutputTableMulti(object):
                         break
 
         # Variablen der Checkboxen zu den Zeilengruppen
-        # self.CheckVarAll = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen
+        self.CheckVarAll = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen
         # self.CheckVarPosFlow = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positivem Flussvolumen im Startknoten der entsprechenden Kante
         # self.CheckVarPosQ = tk.BooleanVar()  # wenn 'True', zeige alle Zeilen mit momentan positiver Warteschlangenlänge
-        # self.CheckVarAll.set(True)
+        self.CheckVarAll.set(False)
         # self.CheckVarPosFlow.set(True)
         # self.CheckVarPosQ.set(True)
 
@@ -89,10 +89,10 @@ class OutputTableMulti(object):
         self.filemenuC.add_checkbutton(label="q zu Beginn", variable=self.CheckVarQ, command=functools.partial(self.check_column, 4))
         self.filemenuC.add_checkbutton(label="Änderung q / nu", variable=self.CheckVarDelta, command=functools.partial(self.check_column, 5))
         self.filemenuC.add_checkbutton(label="c zu Beginn", variable=self.CheckVarC, command=functools.partial(self.check_column, 6))
-        self.filemenuC.add_checkbutton( label="label des Endknotens zu Beginn", variable=self.CheckVarLabel, command=functools.partial(self.check_column, 7))
-        self.eps = 10**(-12)
+        self.filemenuC.add_checkbutton(label="Label des Endknotens zu Beginn", variable=self.CheckVarLabel, command=functools.partial(self.check_column, 7))
+        self.eps = 10**(-13)
         self.bd_tol = bd_tol
-        self.col_heads = ["Gut", "f^+", "f^-", "q zu Beginn", "Änderung q / nu", "c zu Beginn", "label des Endknotens \n zu Beginn"]
+        self.col_heads = ["Gut", "f^+", "f^-", "q zu Beginn", "Änderung q / nu", "c zu Beginn", "Label des Endknotens zu Beginn"]
         self.cols = len(self.col_heads)
         self.single_cols = [4, 5, 6]
         self.multi_cols = [1, 2, 3, 7]
@@ -103,22 +103,26 @@ class OutputTableMulti(object):
         self.grid_entries = np.full((self.m + 2, self.cols + 1), None)
 
         # Beschriftung der ersten zwei Zeilen der ersten Spalte
-        self.grid_entries[0, 0] = tk.Text(self.table, width=16, height=2)
+        self.grid_entries[0, 0] = tk.Text(self.table, width=8, height=2)
         self.grid_entries[0, 0].insert('end', "Kante")
         self.grid_entries[0, 0].config(state='disabled')
         self.grid_entries[0, 0].grid(row=0, column=0)
-        self.grid_entries[1, 0] = tk.Text(self.table, width=16, height=1)
+        self.grid_entries[1, 0] = tk.Text(self.table, width=8, height=1)
         self.grid_entries[1, 0].insert('end', "--------------------------")
         self.grid_entries[1, 0].config(state='disabled')
         self.grid_entries[1, 0].grid(row=1, column= 0)
 
         # Beschriftung der ersten zwei Zeilen der Spalten 2 - 'self.cols'+1
         for co in range(1, self.cols + 1):
-            self.grid_entries[0, co] = tk.Text(self.table, width=22, height=2)
+            if co == 1:
+                wid = 4
+            else:
+                wid = 20
+            self.grid_entries[0, co] = tk.Text(self.table, width=wid, height=2)
             self.grid_entries[0, co].insert('end', self.col_heads[co - 1])
             self.grid_entries[0, co].config(state='disabled')
             self.grid_entries[0, co].grid(row=0, column=co)
-            self.grid_entries[1, co] = tk.Text(self.table, width=22, height=1)
+            self.grid_entries[1, co] = tk.Text(self.table, width=wid, height=1)
             self.grid_entries[1, co].insert('end', "--------------------------")
             self.grid_entries[1, co].config(state='disabled')
             self.grid_entries[1, co].grid(row=1, column=co)
@@ -131,18 +135,22 @@ class OutputTableMulti(object):
                 bg_color = "lightgrey"
             else:
                 bg_color = "white"
-            self.grid_entries[grid_ro, 0] = tk.Text(self.table, width=16, height=self.I, bg=bg_color)
+            self.grid_entries[grid_ro, 0] = tk.Text(self.table, width=8, height=self.I, bg=bg_color)
             self.grid_entries[grid_ro, 0].insert('end', "({}, {})".format(self.E[ro][0], self.E[ro][1]))
             self.grid_entries[grid_ro, 0].config(state='disabled')
             self.grid_entries[grid_ro, 0].grid(row=grid_ro, column=0, sticky="ns")
             for co in self.single_cols:
-                self.grid_entries[grid_ro, co] = tk.Text(self.table, width=22, height=self.I, bg=bg_color)
+                self.grid_entries[grid_ro, co] = tk.Text(self.table, width=20, height=self.I, bg=bg_color)
             len_multi_cols = len(self.multi_cols)
             for ind in range(len_multi_cols):
+                if ind == 0:
+                    wid = 4
+                else:
+                    wid = 20
                 co = self.multi_cols[ind]
                 self.grid_entries[grid_ro, co] = tk.Frame(self.table, bg=bg_color)
                 for i in range(self.I):
-                    self.frame_entries[ro, ind, i] = tk.Text(self.grid_entries[grid_ro, co], width=22, height=1, bg=bg_color)
+                    self.frame_entries[ro, ind, i] = tk.Text(self.grid_entries[grid_ro, co], width=wid, height=1, bg=bg_color)
                     self.frame_entries[ro, ind, i].grid(row=i, column=0)
 
             self.grid_entries[grid_ro, 4].insert('end', 0)
@@ -153,7 +161,7 @@ class OutputTableMulti(object):
             self.grid_entries[grid_ro, 6].insert('end', self.c[ro])
 
             for i in range(self.I):
-                self.frame_entries[ro, 0, i].insert('end', i)
+                self.frame_entries[ro, 0, i].insert('end', i+1)
                 self.frame_entries[ro, 0, i].config(state='disabled')
                 self.frame_entries[ro, 1, i].insert('end', self.fp[i][ro][0][1])
                 self.frame_entries[ro, 1, i].config(state='disabled')
@@ -168,8 +176,8 @@ class OutputTableMulti(object):
             for co in range(1, self.cols + 1):
                 self.grid_entries[grid_ro, co].grid(row=grid_ro, column=co, sticky="ns")
 
-        self.next = tk.Button(self.table, text="Weiter", padx=68, command=self.next)
-        self.prev = tk.Button(self.table, text="Zurück", padx=68, command=self.previous)
+        self.next = tk.Button(self.table, text="Weiter", padx=62, command=self.next)
+        self.prev = tk.Button(self.table, text="Zurück", padx=12, command=self.previous)
         self.next.grid(row=self.m+2, column=self.cols)
         self.prev.grid(row=self.m+2, column=0)
         # Hilfsvariablen zur Platzierung des 'Weiter' - Buttons
@@ -322,6 +330,21 @@ class OutputTableMulti(object):
                 for co in non_hidden_cols:
                     self.grid_entries[ro + 2, co].grid_remove()
 
+    def check_start_nodes(self, col_ind):
+        """
+
+        :param col_ind:
+        :return:
+        """
+        for (v_ind, v) in enumerate(self.V):
+            delta_p = [self.E.index((v,u)) for u in self.G[v].keys()]
+            if self.CheckVarNodes[v_ind].get():
+                for ro in delta_p:
+                    self.grid_entries[ro + 2, col_ind].grid()
+            else:
+                for ro in delta_p:
+                    self.grid_entries[ro + 2, col_ind].grid_remove()
+
     def check_column(self, col_ind):
         """
         Wird aufgerufen bei Änderung des Status einer der Checkboxen im Menü 'Spalten'. Ist die Checkbox zur Spalte
@@ -340,7 +363,8 @@ class OutputTableMulti(object):
                 for ro in range(self.m + 2):
                     self.grid_entries[ro, col_ind].grid()
             else:
-                self.check_all_rows()
+                # self.check_all_rows()
+                self.check_start_nodes(col_ind)
             if col_ind > self.next_btn_col:
                 self.next_btn_col = col_ind
                 self.next.grid(row=self.m+2, column=self.next_btn_col)
@@ -425,7 +449,7 @@ class OutputTableMulti(object):
                             break
 
                 fm_times = [t for (t, v) in self.fm[i][ro]]
-                fm_where = np.where([0 <= theta - t < 2 * self.bd_tol * self.I and not (0 <= self.phases[self.phase_ind-1] - t < 2 * self.bd_tol * self.I) for t in fm_times])[0]
+                fm_where = np.where([abs(theta - t) < 2 * self.bd_tol * self.I and not (abs(self.phases[self.phase_ind-1] - t) < 2 * self.bd_tol * self.I) for t in fm_times])[0]
                 for fm_ind in fm_where:
                     fm_entry = self.frame_entries[ro, self.multi_cols.index(3), i]
                     # fm_entry = self.grid_entries[grid_ro, 3][i]
@@ -529,8 +553,8 @@ class OutputTableMulti(object):
 
                 # setze alle f^- Einträge für die aktuelle Schrittweite
                 fm_times = [t for (t, v) in self.fm[i][ro]]
-                fm_where = np.where([0 <= theta - t < 2 * self.bd_tol * self.I and (self.phase_ind == 0 or not (0 <= self.phases[self.phase_ind-1] < 2 * self.bd_tol * self.I)) for t in fm_times])[0]
-                fm_where_old = np.where([0 <= old_theta - t < 2 * self.bd_tol * self.I and not (0 <= theta - t < 2 * self.bd_tol * self.I) for t in fm_times])[0]
+                fm_where = np.where([abs(theta - t) < 2 * self.bd_tol * self.I and (self.phase_ind == 0 or not (abs(self.phases[self.phase_ind-1] - t) < 2 * self.bd_tol * self.I)) for t in fm_times])[0]
+                fm_where_old = np.where([abs(old_theta - t) < 2 * self.bd_tol * self.I and not (abs(theta - t) < 2 * self.bd_tol * self.I) for t in fm_times])[0]
                 for fm_ind in fm_where:
                     fm_entry = self.frame_entries[ro, self.multi_cols.index(3), i]
                     # fm_entry = self.grid_entries[grid_ro, 3][i]
