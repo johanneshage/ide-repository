@@ -171,8 +171,6 @@ for ind in range(0, len_times, 2):
     axs[1].plot(all_times[ind:ind+2], total_err[ind:ind+2], 'k:')
     axs[1].plot(all_times[ind:ind+2], rel_err[ind:ind+2], 'c:')
 
-maxl2 = np.max([ll for ll in l_max_vals1])
-mninl2 = np.max([abs(l) for l in l_min_vals1])
 l_times = l_times_max0.copy()
 len_l_times_max = len(l_times_max0)
 len_l_times_min = len(l_times_min0)

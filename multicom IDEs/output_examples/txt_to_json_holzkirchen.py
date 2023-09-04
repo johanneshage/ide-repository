@@ -95,8 +95,6 @@ for e_ind in range(m):
     for i in range(I):
         output_json.write('"{0}": {{ \n "times": ['.format(i))
         for val in fp[i][e_ind][:-1]:
-            if 29.42 < val[0] < 29.425:
-                print()
             if val[1] > 0:
                 if val[0] not in fpes[v_ind]:
                     fpes[v_ind][val[0]] = 1
@@ -155,8 +153,6 @@ output_json.write('], \n "queues": [')
 for e_ind in range(m):
     output_json.write('{ "times": [')
     for t in q_times[e_ind][:-1]:
-        if 29.42 < t < 29.425:
-            print()
         output_json.write(' {},'.format(t))
     output_json.write(' {}'.format(q_times[e_ind][-1]))
 
