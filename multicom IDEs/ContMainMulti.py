@@ -1,4 +1,5 @@
 import data
+from ContAppMultiOT import ContAppMultiOT
 from ContAppMulti import ContAppMulti
 
 
@@ -7,6 +8,7 @@ class ContMainMulti:
         self.graph = graph
         self.u = u
 
+        # self.app = ContAppMultiOT(self.graph, self.u)
         self.app = ContAppMulti(self.graph, self.u)
 
 
