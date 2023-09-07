@@ -1,4 +1,3 @@
-import os
 import pickle
 import sys
 sys.path.append("..")
@@ -10,8 +9,7 @@ coords = data.v_coords
 items = graph.items()
 keys = graph.keys()
 
-path = "new_holzkirchen-8.json"
-#assert os.path.isfile(path)
+path = "holzkirchen-8.json"
 
 V = list(graph.keys())
 E = []  # Kanten

@@ -88,7 +88,7 @@ len_s_err1 = len(s_err[1])
 len_s_err2 = len(s_err[2])
 len_s_err3 = len(s_err[3])
 len_s_err4 = len(s_err[4])
-#plt.plot(s_times0, s_vals0, 'r')
+
 s_times1 = [t for (t, v) in s_err[1]]
 s_vals1 = [v for (t, v) in s_err[1]]
 s_times2 = [t for (t, v) in s_err[2]]
@@ -97,11 +97,7 @@ s_times3 = [t for (t, v) in s_err[3]]
 s_vals3 = [v for (t, v) in s_err[3]]
 s_times4 = [t for (t, v) in s_err[4]]
 s_vals4 = [v for (t, v) in s_err[4]]
-max00 = max(s_vals0)
-max11 = max(s_vals1)
-max22 = max(s_vals2)
-max33 = max(s_vals3)
-max44 = max(s_vals4)
+
 s_vals_rel0 = [v for (t, v) in s_err_rel[0]]
 s_vals_rel1 = [v for (t, v) in s_err_rel[1]]
 s_vals_rel2 = [v for (t, v) in s_err_rel[2]]
@@ -119,18 +115,6 @@ l_max_vals3 = [v for (t, v) in l_err_max[3]]
 l_min_vals3 = [v for (t, v) in l_err_min[3]]
 l_max_vals4 = [v for (t, v) in l_err_max[4]]
 l_min_vals4 = [v for (t, v) in l_err_min[4]]
-
-lmini0 = min(l_min_vals0)
-lmini1 = min(l_min_vals1)
-lmini2 = min(l_min_vals2)
-lmini3 = min(l_min_vals3)
-lmini4 = min(l_min_vals4)
-
-lmaxi0 = max(l_max_vals0)
-lmaxi1 = max(l_max_vals1)
-lmaxi2 = max(l_max_vals2)
-lmaxi3 = max(l_max_vals3)
-lmaxi4 = max(l_max_vals4)
 
 total_err = []
 rel_err = []

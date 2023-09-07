@@ -4,9 +4,8 @@ import copy
 from collections import defaultdict
 import time
 import pickle
-# import matplotlib as mpl
-import matplotlib.pyplot as plt
-# import os
+import json
+import os
 
 
 class ContAppMulti:
@@ -39,8 +38,7 @@ class ContAppMulti:
         self.items = G.items()
         self.keys = G.keys()
         self.eps = 10**(-13)  # Rechengenauigkeit
-        self.bd_tol = 10**(-8)
-        # self.flow_vol = []  # merke Flusswerte in den einzelnen Knoten für OutputTable # NUR FÜR OutputTable BENÖTIGT UND KOSTET SPEICHER
+        self.bd_tol = 10**(-5)  # Approximationsgenauigkeit
         self.delta_p = {}
 
         for delta in self.items:
@@ -78,16 +76,11 @@ class ContAppMulti:
 
         self.graphReversed = self.reverse_graph(G)
 
-        """self.E_active = np.ones((self.I, self.m))
+        self.E_active = np.ones((self.I, self.m))
         for i in range(self.I):
-            self.labels.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}))"""
+            self.labels.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}))
 
         """with open('output_examples/holzkirchen_tau_dijkstra.txt', 'wb') as f:
-            pickle.dump(self.labels[0], f)
-            pickle.dump(self.labels[1], f)
-            f.close()"""
-
-        """with open('output_examples/no_term_dijkstra.txt', 'wb') as f:
             pickle.dump(self.labels[0], f)
             pickle.dump(self.labels[1], f)
             f.close()"""
@@ -100,9 +93,9 @@ class ContAppMulti:
                     except EOFError:
                         break
 
-        items = loadall('output_examples/holzkirchen_tau_dijkstra.txt')
+        """items = loadall('output_examples/holzkirchen_tau_dijkstra.txt')
         for item in items:
-            self.labels.append(item.copy())
+            self.labels.append(item.copy())"""
 
         """items = loadall('output_examples/no_term_dijkstra.txt')
         for item in items:
@@ -164,6 +157,9 @@ class ContAppMulti:
 
         self.time_vor_main = time.time()
         self.main()
+
+        # wird Fluss nur teilweise berechnet, so kann Aufruf von 'self.main' aus voriger Zeile ersetzt werden durch folgende Zeile. Dazu müssen zuvor alle Daten eingelesen werden.
+
         # self.main(theta, x_total, x_sum, init_coms, dp_act_old, max_dif, delta_p_act, delta_p_inact, top_ords, nu_min)
 
     # Quelle:
@@ -213,6 +209,7 @@ class ContAppMulti:
          beachtet werden, da nur intern für die Funktion benötigt
         :param predecessors: Liste der bereits ermittelten Vorfahren aller Knoten, anfangs leer, muss nicht beachtet
          werden, da nur intern für die Funktion benötigt
+        :param exact: Boolean, gibt an, ob exakte Kosten verwendet werden, oder nicht (im zweiten Fall werden approximierte Kosten verwendet).
         :return: "output": Liste über alle Knoten mit deren Distanzen zur ersten(!) "src", also zu dem Knoten, der beim
                            ersten Aufruf von "dijkstra" als "src" übergeben wurde
                  "self.dijkstra(graph, x, theta, visited, distances, predecessors)": sorgt für rekursives
@@ -310,27 +307,6 @@ class ContAppMulti:
         preds = self.graphReversed[v].keys()
         return [self.E.index((u,v)) for u in preds]
 
-    '''def get_ingoing_active_edges(self, v, i):
-        """
-        bestimmt alle in 'v' eingehende, momentan für Gut 'i' aktive Kanten
-        :param v: Knoten
-        :param i: Gut
-        :return: Liste der Indizes der aktiven Kanten
-        """
-        preds = self.graphReversed[v].keys()
-        delta_m = [self.E.index((u,v)) for u in preds]
-        return [e for e in delta_m if self.E_active[i, e]]'''
-
-    '''def get_outgoing_edges(self, v_ind):
-        """
-        bestimmt alle aus 'v_ind' ausgehenden Kanten
-        :param v_ind: Knoten
-        :return: Liste der Indizes der Kanten
-        """
-        v = self.V[v_ind]
-        gv_keys = self.G[v].keys()
-        return [self.E.index((v,u)) for u in gv_keys]'''
-
     def get_outgoing_active_edges(self, i, v_ind):
         """
         bestimmt alle aus 'v' ausgehende, momentan für Gut 'i' aktive Kanten
@@ -382,47 +358,24 @@ class ContAppMulti:
             return dif
         return max([dif, 0])
 
-    def gamma(self, x_sum, a, argmin, delta_p_act, coms, coms_lens):
+    def gamma(self, argmin, delta_p_act, coms):
         """
-        Berechnet EIN Element aus der Menge Gamma(x) der Gamma Funktion aus paper. Im Fall dass diese Menge einen Fixpunkt besitzt (mit Konvention eindeutig), wird dieser auch
-        ausgegeben.
-        :param x:
-        :param x_sum:
-        :param a:
+        Erzeugt Liste 'forced_zeros': 'forced_zeroes[i][v_ind]' enthält alle für 'i' aktiven, von 'v_ind' ausgehenden, Kanten, deren Flusswert von 'i' 0 sein muss.
+        :param argmin:
         :param delta_p_act:
         :param coms:
-        :param theta_ind:
         :return:
         """
-        # gx = scipy.sparse.lil_matrix((self.I, self.m))
         forced_zeros = []
         for i in range(self.I):
             forced_zeros.append({})
         for v_ind in coms:
             for i in coms[v_ind]:
                 forced_zeros[i][v_ind] = []
-                # x_sum_nz = 0
-                # cor = 0
                 for e_ind in delta_p_act[i][v_ind]:
                     # w_ind = self.V.index(self.E[e_ind][1])
                     if e_ind not in argmin[i][v_ind]:
-                    #if abs(a[i, v_ind] - self.g(e_ind, x_sum[e_ind]) / self.nu[e_ind] - a[i, w_ind]) > self.bd_tol * coms_lens[v_ind]:
-                        # 'gx[i, e_ind]' = 0 muss gelten
                         forced_zeros[i][v_ind].append(e_ind)
-                        """# merke Unterschied zwischen 'x[i, e_ind]' und 'gx[i, e_ind]' um später Flusserhaltung wiederherzustellen
-                        cor += x[i, e_ind]
-                    else:
-                        # merke bereits festgelegte Flussmenge
-                        x_sum_nz += x[i, e_ind]
-                dp_nz = list(set(delta_p_act[i][v_ind]) - set(forced_zeros[i][v_ind]))
-                if x_sum_nz > self.eps:
-                    for e_ind in dp_nz:
-                        # Verteile übriges Flussvolumen ('cor' viel) auf aktive, nicht-0-Kanten im Verhältnis der bereits zugeteilten Flusswerte
-                        gx[i, e_ind] = x[i, e_ind] * (1 + cor / x_sum_nz)
-                else:
-                    dp_nz_len = len(dp_nz)
-                    for e_ind in dp_nz:
-                        gx[i, e_ind] = cor / dp_nz_len"""
         return forced_zeros
 
     '''def get_items(self, s):
@@ -444,13 +397,13 @@ class ContAppMulti:
         coms = defaultdict(list)
         init_coms = defaultdict(list)
         coms_lens = np.zeros(self.n)  # 'coms_lens[v_ind]' entspricht der Länge von 'init_coms[v_ind]'
-        # self.flow_vol.append(scipy.sparse.lil_matrix((self.n, 1)))  # NUR FÜR OutputTable BENÖTIGT UND KOSTET SPEICHER
-        # print(theta_ind, theta)
+        print(theta_ind, theta)
 
         def calc_flow_by_bounds(xk_old, subset=None):
             """
             :param xk_old:
-            :param subset:
+            :param subset: Teilmenge von 'self.I' x 'self.V': falls angegeben, so enthält 'subset' alle (i, v)-Paare, für die 'bounds' relaxiert wurden. Dann werden nur für diese
+                           Paare neue Flusswerte berechnet (passend zu den neuen 'bounds')
             :return:
             """
 
@@ -585,14 +538,7 @@ class ContAppMulti:
             return a, a_min2, argmin, argmin_nf
 
         def relax_bounds():
-            """
-            Überprüft für jedes relevante (i,v) - Paar ob einer von zwei Fällen eintritt:
-                1.: Es sind alle aktiven, nichtminmalen, von 'v' ausgehenden Kanten fixiert. Da Aufteilung noch nicht im Sinne eines IDE-Flusses und müssen die Flusswerte zwischen
-                den einzelnen Kanten noch umverteilt werden, dies ist aber nicht möglich, da nur Kante im 'argmin' umverteilt werden können, was
-                2.:
-            :return:
-            """
-            relaxed = []
+            relaxed = []  # speichere (i, v)-Paare, deren 'bounds' in diesem Schritt relaxiert wurden
             for v_ind in coms:
                 for i in coms[v_ind]:
                     arg = list(set(delta_p_act[i][v_ind]) - set(argmin[i][v_ind]))
@@ -659,31 +605,12 @@ class ContAppMulti:
                     if np.any([[e_ind for e_ind in bounds_f[v_ind][i] if xk[i, e_ind] > 2 * self.bd_tol / nu_min[i, v_ind] and e_ind not in argmin[i][v_ind]] for i in coms[v_ind]]):
                         # sonst -> Abbruch
                         return False
-                    """for i in coms[v_ind]:
-                        # ist ein Knoten der zwischen 'v_ind' und 'ti' liegt noch nicht fixiert -> Abbruch
-                        visited = []
-                        dfs_step(visited, v_ind, i)
-                        visited.remove(v_ind)
-                        if np.any([w_ind in coms for w_ind in visited]):
-                            return False"""
                     for i in coms[v_ind]:
                         to_ind = top_ords[i].index(v_ind)
                         future_w = [w_ind for w_ind in top_ords[i][1:to_ind] if w_ind in coms]
                         if search_path(v_ind, future_w, i):
                             # ist ein Knoten der zwischen 'v_ind' und 'ti' liegt noch nicht approximiert -> Abbruch
                             return False
-
-                    """for i in coms[v_ind]:
-                        argmin_first = argmin[i][v_ind][0]
-                        argmin_last = argmin[i][v_ind][-1]
-                        w_first = self.V.index(self.E[argmin_first][1])
-                        w_last = self.V.index(self.E[argmin_last][1])
-                        a_e_first = self.g(argmin_first, x_sum[argmin_first] + x_sum_fix[argmin_first]) / self.nu[argmin_first] + a[i, w_first]
-                        a_e_last = self.g(argmin_last, x_sum[argmin_last] + x_sum_fix[argmin_last]) / self.nu[argmin_last] + a[i, w_last]
-                        if a_e_last - a_e_first > self.bd_tol / self.nu[argmin_last] + self.bd_tol / self.nu[argmin_first]:
-                            if theta_ind == 15:
-                                print()
-                            return False"""
                     # sonst: 'v_ind' kann approximiert werden
                     return True
                 return False
@@ -734,7 +661,6 @@ class ContAppMulti:
             for v_ind in range(self.n):
                 if self.b[i, v_ind] > 0:
                     coms_lens[v_ind] += 1
-                    # self.flow_vol[-1][v_ind, 0] += self.b_ot[-1][i, v_ind]
                     if len(delta_p_act[i][v_ind]) == 1:
                         e_ind = delta_p_act[i][v_ind][0]
                         xfp[i, e_ind] = self.b[i, v_ind]
@@ -822,7 +748,7 @@ class ContAppMulti:
                 return xfp, x_sum_fix, a, argmin, init_coms
 
             while True:
-                forced_zeros = self.gamma(x_sum + x_sum_fix, a, argmin, delta_p_act_nf, coms, coms_lens)  # gamma ???
+                forced_zeros = self.gamma(argmin, delta_p_act_nf, coms)
                 fp_comp = []
                 new_f = []
                 for v_ind in coms:
@@ -948,9 +874,7 @@ class ContAppMulti:
         else:
             theta_ind = len(self.global_phase) - 2
         # Obergrenze für theta
-        T = 5
-        # inflow_lens = np.zeros(self.m)
-        # flow_tol = np.ones(self.n)
+        T = 100000
         if theta == 0:
             # berechne 'delta_p_act', delta_p_inact', 'top_ords' und 'self.b' für 'theta' = 0
             for i in range(self.I):
@@ -966,10 +890,10 @@ class ContAppMulti:
                 top_ords.append(self.topologicalSort(i, delta_p_act[i]))
         skip_count = 0
         while theta < T:
-            s_err = [[], [], []]
-            s_err_rel = [[], [], []]
-            #l_err_max = [[], [], []]
-            #l_err_min = [[], [], []]
+            s_err = [[] for _ in range(self.I)]  # IDE-Error je Gut
+            s_err_rel = [[] for _ in range(self.I)]  # relativer IDE-Error je Gut
+            l_err_max = [[] for _ in range(self.I)]  # maximaler Fehler im Knotenlabel je Gut
+            l_err_min = [[] for _ in range(self.I)]  # betraglich größter, negativer, Fehler im Knotenlabel je Gut
             # in der Zukunft liegende Zeitpunkte aus der Liste 'self.u_start'
             start_points = [t for t in self.u_start if t > theta]
             theta_ind += 1
@@ -1052,7 +976,7 @@ class ContAppMulti:
                         # verwende gleiche Flussaufteilung nochmal, 'a', 'argmin', 'top_ords', 'delta_p_act', 'delta_p_inact' bereits aktualisiert
                         skip_calcs = True
                         skip_count += 1
-                        # print("SKIP", theta_ind, theta)
+                        print("SKIP", theta_ind, theta)
                     else:
                         x_total, x_sum, a, argmin, init_coms = self.fp_approx(theta_ind, top_ords, delta_p_act, nu_min)
                 else:
@@ -1100,7 +1024,6 @@ class ContAppMulti:
                         # falls sich f_{ti}^- -Wert durch die Flussaufteilung in dieser Phase ändert, aktualisiere 'self.fm'
                         # Vergleichen hier zwei unterschiedliche Zeitpunkte
                         if abs(self.fm[ti][e_ind][fm_ind][1] - outflow) > 2 * (self.bd_tol / self.nu[e_ind] + self.bd_tol / dp_min_nu):
-                            # !!!
                             if abs(self.fm[ti][e_ind][fm_ind][0] - outflow_time) < self.eps:
                                 # zuvor berechneter 'outflow' kann sich durch Änderung der Flusswerte verzögern
                                 del self.fm[ti][e_ind][fm_ind]
@@ -1149,9 +1072,7 @@ class ContAppMulti:
                                     outflow_time = theta + self.r[e_ind]
                                 fm_ind = self.last_fm_change(ti, e_ind, outflow_time)
                                 # setze 'self.fm'- Wert auf 0, falls dies noch nicht geschehen ist
-                                #!!!
                                 if abs(self.fm[ti][e_ind][fm_ind][1]) > 0:
-                                    # if abs(self.fm[ti][e_ind][fm_ind][1]) > self.I * self.bd_tol:
                                     self.fm[ti][e_ind].append((outflow_time, 0))
 
                         # bestimme, ob sich vor dem Ende der aktuellen Phase ein f^- -Wert ändert -> verkürze Phase
@@ -1273,13 +1194,6 @@ class ContAppMulti:
                     if np.any([theta_ind in self.fp_ind[i][e_ind] for i in range(self.I)]) and (self.q[e_ind] > self.eps or self.q_global[e_ind][-1] > self.eps or x_sum[e_ind] > self.nu[e_ind] + self.eps):
                         self.q_global[e_ind].append(self.q[e_ind])
 
-            """for v_ind in range(self.n):
-                for e_ind in self.delta_p[v_ind]:
-                    if np.any([self.fp[i][e_ind][-1][1] > 0 for i in range(self.I)]):
-                        inflow_lens[e_ind] += next_phase[-1]
-                        if inflow_lens[e_ind] > flow_tol[v_ind]:
-                            flow_tol[v_ind] = inflow_lens[e_ind]"""
-
             alpha = (next_phase[-1] + next_phase[0]) / 2
             if next_sp - theta - alpha < alpha - next_phase[0] + self.eps:
                 # Ausnahme bei der Schrittweitenwahl: Zeitpunkte mit Änderungen der externen Einflussraten dürfen nicht durch einen früheren Zeitpunkt approximiert werden, da sie
@@ -1326,20 +1240,20 @@ class ContAppMulti:
                                 # 'label_dif' > 0: geschieht nur aufgrund von Approximationsfehlern, für Kanten die aktiv sein sollten
                                 self.E_active[i, edge] = 1
 
-                #l_star = []
+                l_star = []
                 for i in range(self.I):
                     err_i = 0
                     err_i_rel = 0
-                    #l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
-                    #l_max = 0
-                    #l_min = 0
+                    l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
+                    l_max = 0
+                    l_min = 0
                     for v_ind in range(self.n):
                         if self.b[i, v_ind] > 0:
-                            """l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
+                            l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
                             if l_diff > l_max:
                                 l_max = l_diff
                             elif l_diff < l_min:
-                                l_min = l_diff"""
+                                l_min = l_diff
                             if len(delta_p_act[i][v_ind]) == 1:
                                 continue
                             vmax = -np.Inf
@@ -1348,9 +1262,17 @@ class ContAppMulti:
                                 w_ind = self.V.index(self.E[e_ind][1])
                                 val = self.labels[i][w_ind] + self.c[e_ind]
                                 if self.fp[i][e_ind][-1][1] > 0 and val > vmax:
+                                    if (i < 2 or i == 3) and theta > 13:
+                                        print()
                                     vmax = val
                                 if val < vmin:
+                                    if (i < 2 or i == 3) and theta == 13:
+                                        print()
                                     vmin = val
+
+                            if i < 2 or i == 3:
+                                if theta_ind >= 34:
+                                    print()
                             err_i += vmax - vmin
                             err_i_rel += (vmax - vmin) / self.b[i, v_ind]
                     if err_i < self.eps:
@@ -1358,14 +1280,11 @@ class ContAppMulti:
                         err_i_rel = 0
                     s_err[i].append((theta, err_i))
                     s_err_rel[i].append((theta, err_i_rel))
-                    #l_err_max[i].append((theta, l_max))
-                    #l_err_min[i].append((theta, l_min))
-                """with open('output_examples/new_bsp2_errors-5.txt', 'ab') as f:
-                    pickle.dump(s_err, f)
-                    pickle.dump(s_err_rel, f)
-                    pickle.dump(l_err_max, f)
-                    pickle.dump(l_err_min, f)
-                    f.close()"""
+                    if theta_ind >= 59 and (i ==1 or i== 3):
+                        lmaxxi = l_max
+                        print()
+                    l_err_max[i].append((theta, l_max))
+                    l_err_min[i].append((theta, l_min))
 
                 dp_act_old = copy.deepcopy(delta_p_act)
                 for i in range(self.I):
@@ -1375,7 +1294,6 @@ class ContAppMulti:
                     # berechne top. Sortierung zur aktualisierten Menge aktiver Kanten für Gut 'i'
                     top_ords[i] = self.topologicalSort(i, delta_p_act[i])
 
-                # !!! zuletzt geändert: max_dif jetzt vor refine aktualisiert
                 for i in range(self.I):
                     for v_ind in range(self.n):
                         for e_ind in delta_p_act[i][v_ind]:
@@ -1416,20 +1334,20 @@ class ContAppMulti:
                             if self.fm[i][e_ind][-1][1] > self.eps:
                                 self.fm[i][e_ind].append((theta + self.r[e_ind], 0))
 
-                #l_star = []
+                l_star = []
                 for i in range(self.I):
                     err_i = 0
                     err_i_rel = 0
-                    #l_max = 0
-                    #l_min = 0
-                    #l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
+                    l_max = 0
+                    l_min = 0
+                    l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
                     for v_ind in range(self.n):
                         if self.b[i, v_ind] > 0:
-                            """l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
+                            l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
                             if l_diff > l_max:
                                 l_max = l_diff
                             elif l_diff < l_min:
-                                l_min = l_diff"""
+                                l_min = l_diff
                             if len(dp_act_old[i][v_ind]) == 1:
                                 continue
                             vmax = -np.Inf
@@ -1441,6 +1359,9 @@ class ContAppMulti:
                                     vmax = val
                                 if val < vmin:
                                     vmin = val
+                            if i < 2 or i == 3:
+                                if vmax - vmin > 2 * 10**(-6):
+                                    print()
                             err_i += vmax - vmin
                             err_i_rel += (vmax - vmin) / self.b[i, v_ind]
                     if err_i < self.eps:
@@ -1448,97 +1369,17 @@ class ContAppMulti:
                         err_i_rel = 0
                     s_err[i].append((theta, err_i))
                     s_err_rel[i].append((theta, err_i_rel))
-                    #l_err_max[i].append((theta, l_max))
-                    #l_err_min[i].append((theta, l_min))
-                """with open('output_examples/holzkirchen_final_err5-8.txt', 'ab') as f:
+                    if theta_ind >= 59 and (i ==1 or i== 3):
+                        lmaxxii = l_max
+                        print()
+                    l_err_max[i].append((theta, l_max))
+                    l_err_min[i].append((theta, l_min))
+                with open('output_examples/VarianteD_err-5.txt', 'ab') as f:
                     pickle.dump(s_err, f)
                     pickle.dump(s_err_rel, f)
-                    #pickle.dump(l_err_max, f)
-                    #pickle.dump(l_err_min, f)
-                    f.close()"""
-
-        """for i in range(self.I):
-            # am Ende sind alle f^+ -Werte 0
-            for e in range(self.m):
-                if abs(self.fp[i][e][-1][1]) > self.eps:
-                    self.fp[i][e].append((theta - next_phase[-1], 0))
-                    self.fp_ind[i][e].append(theta_ind)"""
-
-        """s_times0 = [t for (t, v) in s_err[0]]
-        s_vals0 = [v for (t, v) in s_err[0]]
-        #plt.plot(s_times0, s_vals0, 'r')
-        s_times1 = [t for (t, v) in s_err[1]]
-        s_vals1 = [v for (t, v) in s_err[1]]
-        #plt.plot(s_times1, s_vals1, 'b')
-        s_times2 = [t for (t, v) in s_err[2]]
-        s_vals2 = [v for (t, v) in s_err[2]]
-        #plt.plot(s_times2, s_vals2, 'g')
-        s_vals_rel0 = [v for (t, v) in s_err_rel[0]]
-        s_vals_rel1 = [v for (t, v) in s_err_rel[1]]
-        s_vals_rel2 = [v for (t, v) in s_err_rel[2]]
-        total_err = []
-        rel_err = []
-        for t in range(len(s_times0)):
-            total_err.append(s_vals0[t] + s_vals1[t] + s_vals2[t])
-            rel_err.append(s_vals_rel0[t] + s_vals_rel1[t] + s_vals_rel2[t])
-        #plt.plot(s_times0, total_err, 'k')
-        fig, axs = plt.subplots(2)
-        # fig.suptitle('Vertically stacked subplots')
-        axs[0].plot(s_times0, s_vals0, 'r')
-        axs[0].plot(s_times0, s_vals1, 'b')
-        axs[0].plot(s_times0, s_vals2, 'g')
-        axs[1].plot(s_times0, rel_err, 'c')
-        axs[1].plot(s_times0, total_err, 'k')
-        axs[1].legend(['relativ', 'absolut'])
-        axs[0].set(ylabel='Fehler', xlim=(0, 7), ylim=0)
-        axs[1].set(xlabel='Zeit', ylabel='Fehler', xlim=(0, 7), ylim=0)
-        plt.show()"""
-
-        """s_times0 = [t for (t, v) in s_err[0]]
-        s_end_times0 = [t for (t, v) in s_err[0][1:]] + [self.global_phase[-1]]
-        nz_times0 = []
-        nz_vals0 = []
-        for tvi in range(len(s_err[0])):
-            if s_err[0][tvi][1] > self.eps:
-                nz_times0.append(s_err[0][tvi][0])
-                nz_times0.append(s_err[0][tvi+1][0])
-                nz_vals0.append(s_err[0][tvi][1])
-                nz_vals0.append(s_err[0][tvi][1])
-        s_vals0 = [v for (t, v) in s_err[0]]
-        plt.hlines(s_vals0, s_times0, s_end_times0, colors='r')
-        plt.vlines(nz_times0, np.zeros(len(nz_vals0)), nz_vals0, colors='r', linestyles='dotted')
-        s_times1 = [t for (t, v) in s_err[1]]
-        s_end_times1 = [t for (t, v) in s_err[1][1:]] + [self.global_phase[-1]]
-        nz_times1 = []
-        nz_vals1 = []
-        for tvi in range(len(s_err[1])):
-            if s_err[1][tvi][1] > self.eps:
-                nz_times1.append(s_err[1][tvi][0])
-                nz_times1.append(s_err[1][tvi+1][0])
-                nz_vals1.append(s_err[1][tvi][1])
-                nz_vals1.append(s_err[1][tvi][1])
-        s_vals1 = [v for (t, v) in s_err[1]]
-        plt.hlines(s_vals1, s_times1, s_end_times1, colors='b')
-        plt.vlines(nz_times1, np.zeros(len(nz_vals1)), nz_vals1, colors='b', linestyles='dotted')
-        s_times2 = [t for (t, v) in s_err[2]]
-        s_end_times2 = [t for (t, v) in s_err[2][1:]] + [self.global_phase[-1]]
-        nz_times2 = []
-        nz_vals2 = []
-        for tvi in range(len(s_err[2])):
-            if s_err[2][tvi][1] > self.eps:
-                nz_times2.append(s_err[2][tvi][0])
-                nz_times2.append(s_err[2][tvi+1][0])
-                nz_vals2.append(s_err[2][tvi][1])
-                nz_vals2.append(s_err[2][tvi][1])
-        s_vals2 = [v for (t, v) in s_err[2]]
-        plt.hlines(s_vals2, s_times2, s_end_times2, colors='g')
-        plt.vlines(nz_times2, np.zeros(len(nz_vals2)), nz_vals2, colors='g', linestyles='dotted')
-        plt.xlabel("Zeit")
-        plt.ylabel("Fehler")
-        plt.xlim(0, 6)
-        plt.ylim(0, 4 * self.bd_tol)
-        plt.show()"""
-        # erzeuge Ausgabe
+                    pickle.dump(l_err_max, f)
+                    pickle.dump(l_err_min, f)
+                    f.close()
 
         end_time = time.time()
         timediff1 = end_time - self.time_vor_main
@@ -1549,6 +1390,14 @@ class ContAppMulti:
         print(timediff2)
 
         """with open('output_examples/holzkirchen_final-8.txt', 'ab') as f:
+            pickle.dump(self.fp, f)
+            pickle.dump(self.fm, f)
+            pickle.dump(self.q_global, f)
+            pickle.dump(self.q_ind, f)
+            pickle.dump(self.global_phase, f)
+            f.close()"""
+
+        """with open('output_examples/sioux_falls-5_new.txt', 'ab') as f:
             pickle.dump(self.fp, f)
             pickle.dump(self.fm, f)
             pickle.dump(self.q_global, f)
@@ -1588,18 +1437,10 @@ class ContAppMulti:
             pickle.dump(self.global_phase, f)
             f.close()"""
 
-        """with open('output_examples/bsp_1-5.txt', 'ab') as f:
-            pickle.dump(self.fp, f)
-            pickle.dump(self.fm, f)
-            pickle.dump(self.q_global, f)
-            pickle.dump(self.q_ind, f)
-            pickle.dump(self.global_phase, f)
-            f.close()"""
-
-        '''output_json = open("output_examples/output-flow2.json", "w")
+        output_json = open("output_examples/VarianteD-5.json", "w")
         output_json.write('{"network": {\n "nodes": [')
         output_json.close()
-        output_json = open("output_examples/output-flow2.json", "a")
+        output_json = open("output_examples/VarianteD-5.json", "a")
         """for v_ind in range(self.n):
            output_json.write(' {{"id": {0}, "x": {1}, "y": 0.0}},'.format(v_ind, 0.0 + v_ind))"""
         output_json.write(' {"id": 0, "x": 0, "y": 0},')
@@ -1616,35 +1457,35 @@ class ContAppMulti:
         output_json.write(' {"id": 11, "x": 6, "y": 0},')
         output_json.write(' {"id": 12, "x": 8, "y": 1.25},')
         output_json.close()
-        with open("output_examples/output-flow2.json", 'rb+') as oj:
+        with open("output_examples/VarianteD-5.json", 'rb+') as oj:
             oj.seek(-1, os.SEEK_END)
             oj.truncate()
             oj.close()
 
-        output_json = open("output_examples/output-flow2.json", "a")
+        output_json = open("output_examples/VarianteD-5.json", "a")
         output_json.write('], \n "edges": [')
         for e_ind in range(self.m):
             v_ind = self.V.index(self.E[e_ind][0])
             w_ind = self.V.index(self.E[e_ind][1])
             output_json.write(' {{"id": {0}, "from": {1}, "to": {2}, "capacity": {3}, "transitTime": {4} }},'.format(e_ind, v_ind, w_ind, self.nu[e_ind], self.r[e_ind]))
         output_json.close()
-        with open("output_examples/output-flow2.json", 'rb+') as oj:
+        with open("output_examples/VarianteD-5.json", 'rb+') as oj:
             oj.seek(-1, os.SEEK_END)
             oj.truncate()
             oj.close()
 
-        output_json = open("output_examples/output-flow2.json", "a")
+        output_json = open("output_examples/VarianteD-5.json", "a")
         output_json.write('], \n "commodities": [')
-        colors = ["red", "blue", "green"]
+        colors = ["red", "blue", "green", "purple", "orange", "yellow", "pink", "brown", "black"]
         for i in range(self.I):
             output_json.write(' {{ "id": {0}, "color": "{1}" }},'.format(i, colors[i]))
         output_json.close()
-        with open("output_examples/output-flow2.json", 'rb+') as oj:
+        with open("output_examples/VarianteD-5.json", 'rb+') as oj:
             oj.seek(-1, os.SEEK_END)
             oj.truncate()
             oj.close()
 
-        output_json = open("output_examples/output-flow2.json", "a")
+        output_json = open("output_examples/VarianteD-5.json", "a")
         output_json.write('] }, \n "flow": { \n "inflow": [')
         for e_ind in range(self.m):
             output_json.write('{')
@@ -1653,35 +1494,35 @@ class ContAppMulti:
                 for val in self.fp[i][e_ind]:
                     output_json.write(' {},'.format(val[0]))
                 output_json.close()
-                with open("output_examples/output-flow2.json", 'rb+') as oj:
+                with open("output_examples/VarianteD-5.json", 'rb+') as oj:
                     oj.seek(-1, os.SEEK_END)
                     oj.truncate()
                     oj.close()
-                output_json = open("output_examples/output-flow2.json", "a")
+                output_json = open("output_examples/VarianteD-5.json", "a")
                 output_json.write('], \n "values": [')
                 for val in self.fp[i][e_ind]:
                     output_json.write(' {},'.format(val[1]))
                 output_json.close()
-                with open("output_examples/output-flow2.json", 'rb+') as oj:
+                with open("output_examples/VarianteD-5.json", 'rb+') as oj:
                     oj.seek(-1, os.SEEK_END)
                     oj.truncate()
                     oj.close()
-                output_json = open("output_examples/output-flow2.json", "a")
+                output_json = open("output_examples/VarianteD-5.json", "a")
                 output_json.write('] },')
             output_json.close()
-            with open("output_examples/output-flow2.json", 'rb+') as oj:
+            with open("output_examples/VarianteD-5.json", 'rb+') as oj:
                 oj.seek(-1, os.SEEK_END)
                 oj.truncate()
                 oj.close()
-            output_json = open("output_examples/output-flow2.json", "a")
+            output_json = open("output_examples/VarianteD-5.json", "a")
             output_json.write('},')
         output_json.close()
-        with open("output_examples/output-flow2.json", 'rb+') as oj:
+        with open("output_examples/VarianteD-5.json", 'rb+') as oj:
             oj.seek(-1, os.SEEK_END)
             oj.truncate()
             oj.close()
 
-        output_json = open("output_examples/output-flow2.json", "a")
+        output_json = open("output_examples/VarianteD-5.json", "a")
         output_json.write('], \n "outflow": [')
         for e_ind in range(self.m):
             output_json.write('{')
@@ -1690,67 +1531,67 @@ class ContAppMulti:
                 for val in self.fm[i][e_ind]:
                     output_json.write(' {},'.format(val[0]))
                 output_json.close()
-                with open("output_examples/output-flow2.json", 'rb+') as oj:
+                with open("output_examples/VarianteD-5.json", 'rb+') as oj:
                     oj.seek(-1, os.SEEK_END)
                     oj.truncate()
                     oj.close()
-                output_json = open("output_examples/output-flow2.json", "a")
+                output_json = open("output_examples/VarianteD-5.json", "a")
                 output_json.write('], \n "values": [')
                 for val in self.fm[i][e_ind]:
                     output_json.write(' {},'.format(val[1]))
                 output_json.close()
-                with open("output_examples/output-flow2.json", 'rb+') as oj:
+                with open("output_examples/VarianteD-5.json", 'rb+') as oj:
                     oj.seek(-1, os.SEEK_END)
                     oj.truncate()
                     oj.close()
-                output_json = open("output_examples/output-flow2.json", "a")
+                output_json = open("output_examples/VarianteD-5.json", "a")
                 output_json.write('] },')
             output_json.close()
-            with open("output_examples/output-flow2.json", 'rb+') as oj:
+            with open("output_examples/VarianteD-5.json", 'rb+') as oj:
                 oj.seek(-1, os.SEEK_END)
                 oj.truncate()
                 oj.close()
-            output_json = open("output_examples/output-flow2.json", "a")
+            output_json = open("output_examples/VarianteD-5.json", "a")
             output_json.write('},')
         output_json.close()
-        with open("output_examples/output-flow2.json", 'rb+') as oj:
+        with open("output_examples/VarianteD-5.json", 'rb+') as oj:
             oj.seek(-1, os.SEEK_END)
             oj.truncate()
             oj.close()
 
-        output_json = open("output_examples/output-flow2.json", "a")
+        output_json = open("output_examples/VarianteD-5.json", "a")
         output_json.write('], \n "queues": [')
         for e_ind in range(self.m):
             output_json.write('{ "times": [')
             for t in self.q_ind[e_ind]:
                 output_json.write(' {},'.format(self.global_phase[t]))
             output_json.close()
-            with open("output_examples/output-flow2.json", 'rb+') as oj:
+            with open("output_examples/VarianteD-5.json", 'rb+') as oj:
                 oj.seek(-1, os.SEEK_END)
                 oj.truncate()
                 oj.close()
 
-            output_json = open("output_examples/output-flow2.json", "a")
+            output_json = open("output_examples/VarianteD-5.json", "a")
             output_json.write('], "values": [')
             for val in self.q_global[e_ind]:
                 output_json.write(' {},'.format(val))
             output_json.close()
-            with open("output_examples/output-flow2.json", 'rb+') as oj:
+            with open("output_examples/VarianteD-5.json", 'rb+') as oj:
                 oj.seek(-1, os.SEEK_END)
                 oj.truncate()
                 oj.close()
 
-            output_json = open("output_examples/output-flow2.json", "a")
+            output_json = open("output_examples/VarianteD-5.json", "a")
             output_json.write('], \n "domain": ["-Infinity", "Infinity"], "lastSlope": 0.0, "firstSlope": 0.0},')
 
         output_json.close()
-        with open("output_examples/output-flow2.json", 'rb+') as oj:
+        with open("output_examples/VarianteD-5.json", 'rb+') as oj:
             oj.seek(-1, os.SEEK_END)
             oj.truncate()
             oj.close()
-        output_json = open("output_examples/output-flow2.json", "a")
+        output_json = open("output_examples/VarianteD-5.json", "a")
         output_json.write('] } }')
-        output_json.close()'''
+        output_json.close()
 
         nachwrite = time.time()
         writetime = nachwrite - end_time

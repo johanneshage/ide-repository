@@ -110,7 +110,7 @@ class OutputTableMulti(object):
         self.grid_entries[1, 0] = tk.Text(self.table, width=8, height=1)
         self.grid_entries[1, 0].insert('end', "--------------------------")
         self.grid_entries[1, 0].config(state='disabled')
-        self.grid_entries[1, 0].grid(row=1, column= 0)
+        self.grid_entries[1, 0].grid(row=1, column=0)
 
         # Beschriftung der ersten zwei Zeilen der Spalten 2 - 'self.cols'+1
         for co in range(1, self.cols + 1):
@@ -203,7 +203,7 @@ class OutputTableMulti(object):
             return dif / self.nu[e_ind]
         return np.max([dif / self.nu[e_ind], 0])
 
-    def check_all_rows(self):
+    '''def check_all_rows(self):
         """
         Überprüft Status der Checkbox zum Zeilenmenüpunkt 'alle'. Ist die zugehörige Variable 'self.CheckVarAll' auf
         True, so werden alle Zeilen angezeigt. Andernfalls werden durch aufrufen der Funktionen 'self.check_pos_q' und
@@ -223,7 +223,7 @@ class OutputTableMulti(object):
             for ro in range(self.m):
                 for co in non_hidden_cols:
                     self.grid_entries[ro + 2, co].grid_remove()
-            # Im Fall dass genau eine der Variablen 'self.CheckVarPosFlow' und 'self.CheckVarPosQ' 'False' ist, muss
+            # Im Fall, dass genau eine der Variablen 'self.CheckVarPosFlow' und 'self.CheckVarPosQ' 'False' ist, muss
             # die entsprechende Funktion 'self.check_pos_flow', bzw. 'self.check_pos_q' zuerst aufgerufen werden,
             # um Korrektheit zu garantieren (sonst können Zeilen die eigentlich angezeigt werden sollen versteckt
             # werden).
@@ -233,9 +233,9 @@ class OutputTableMulti(object):
             else:
                 self.check_pos_flow()
                 self.check_pos_q()
-        return
+        return'''
 
-    def check_pos_flow(self):
+    '''def check_pos_flow(self):
         """
         Prüft den Status der Variable 'self.CheckVarPosFlow'. Ist dieser 'True', so werden immer alle Kanten angezeigt,
         in deren Startknoten sich eine positive Flussmenge befindet. Ist der Wert 'False', so werden diese Kanten
@@ -273,9 +273,9 @@ class OutputTableMulti(object):
                     self.hidden_rows.append(ro)
                     for co in non_hidden_cols:
                         self.grid_entries[ro + 2, co].grid_remove()
-        return
+        return'''
 
-    def check_pos_q(self):
+    '''def check_pos_q(self):
         """
         Prüft den Status der Variable 'self.CheckVarPosQ'. Ist dieser 'True', so werden immer alle Kanten angezeigt, die
         eine positive Warteschlangenlänge besitzen. Ist der Wert 'False', so werden diese Kanten versteckt
@@ -308,7 +308,7 @@ class OutputTableMulti(object):
                     self.hidden_rows.append(ro)
                     for co in non_hidden_cols:
                         self.grid_entries[ro + 2, co].grid_remove()
-        return
+        return'''
 
     def check_node(self, v_ind):
         """

@@ -1,4 +1,3 @@
-import os
 import pickle
 import sys
 sys.path.append("..")
@@ -9,8 +8,7 @@ u = data.u
 items = graph.items()
 keys = graph.keys()
 
-path = "sioux_falls-5_new.json"
-#assert os.path.isfile(path)
+path = "sioux_falls-5.json"
 
 V = list(graph.keys())
 E = []  # Kanten
@@ -61,7 +59,7 @@ def loadall(filename):
                 break
 
 
-items = loadall('sioux_falls-5_new.txt')
+items = loadall('sioux_falls-5.txt')
 
 for (no, item) in enumerate(items):
     if no == 0:

@@ -135,7 +135,6 @@ s_vals197 = [v for (t, v) in rel_fps1[1][2]]
 #plt.plot(s_times0, total_err, 'k')
 fig, axs = plt.subplots(3)
 fig.set_figheight(6)
-# fig.suptitle('Vertically stacked subplots')
 
 #axs[0].yaxis.set_major_formatter(formatter)
 #axs[1].yaxis.set_major_formatter(formatter)

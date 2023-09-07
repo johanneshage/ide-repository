@@ -17,21 +17,15 @@ s_err = [[], [], []]
 s_err_rel = [[], [], []]
 l_err_max = [[(0,0)], [(0,0)], [(0,0)]]
 l_err_min = [[(0,0)], [(0,0)], [(0,0)]]
-items = loadall('output_examples/bsp1_errors-5.txt')
+items = loadall('output_examples/VarianteA_err-5.txt')
 for (no, item) in enumerate(items):
     it = item.copy()
     if no % 4 == 1:
         for (t, v) in it[0]:
-            #if len(s_err_rel[0]) > 1 and v == 0 and s_err_rel[0][-1][1] == 0 and s_err_rel[0][-2][1] == 0:
-            #    continue
             s_err_rel[0].append((t, v))
         for (t, v) in it[1]:
-            #if len(s_err_rel[1]) > 1 and v == 0 and s_err_rel[1][-1][1] == 0 and s_err_rel[1][-2][1] == 0:
-            #    continue
             s_err_rel[1].append((t, v))
         for (t, v) in it[2]:
-            #if len(s_err_rel[2]) > 1 and v == 0 and s_err_rel[2][-1][1] == 0 and s_err_rel[2][-2][1] == 0:
-            #    continue
             s_err_rel[2].append((t, v))
     elif no % 4 == 2:
         for (t, v) in it[0]:
@@ -49,16 +43,10 @@ for (no, item) in enumerate(items):
             l_err_min[2].append((t, v))
     else:
         for (t, v) in it[0]:
-            #if len(s_err[0]) > 1 and v == 0 and s_err[0][-1][1] == 0 and s_err[0][-2][1] == 0:
-            #    continue
             s_err[0].append((t, v))
         for (t, v) in it[1]:
-            #if len(s_err[1]) > 1 and v == 0 and s_err[1][-1][1] == 0 and s_err[1][-2][1] == 0:
-            #    continue
             s_err[1].append((t, v))
         for (t, v) in it[2]:
-            #if len(s_err[2]) > 1 and v == 0 and s_err[2][-1][1] == 0 and s_err[2][-2][1] == 0:
-            #    continue
             s_err[2].append((t, v))
 
 
@@ -70,7 +58,7 @@ s_vals0 = [v for (t, v) in s_err[0]]
 len_s_err0 = len(s_err[0])
 len_s_err1 = len(s_err[1])
 len_s_err2 = len(s_err[2])
-#plt.plot(s_times0, s_vals0, 'r')
+
 s_times1 = [t for (t, v) in s_err[1]]
 s_vals1 = [v for (t, v) in s_err[1]]
 s_times2 = [t for (t, v) in s_err[2]]
@@ -131,24 +119,20 @@ for t in times:
         rel_err.append(total_v_rel)
         all_times.append(t)
 
-#plt.plot(s_times0, total_err, 'k')
 plt.rcParams['svg.fonttype'] = 'none'
 fig, axs = plt.subplots(3)
 fig.set_figheight(8)
 fig.set_figwidth(8)
-# fig.suptitle('Vertically stacked subplots')
 
 axs[0].yaxis.set_major_formatter(formatter)
 axs[1].yaxis.set_major_formatter(formatter)
 axs[2].yaxis.set_major_formatter(formatter)
-# axs[0].plot(s_times0, s_vals0, 'r')
 axs[0].plot([0, s_times0[0]], [0, s_vals0[0]], 'r')
 axs[0].plot([0, s_times1[0]], [0, s_vals1[0]], 'b')
 axs[0].plot([0, s_times2[0]], [0, s_vals2[0]], 'g')
 for ind in range(0, len_s_err0, 2):
     axs[0].plot(s_times0[ind+1:ind+3], s_vals0[ind+1:ind+3], 'r')
     axs[0].plot(s_times0[ind:ind+2], s_vals0[ind:ind+2], 'r:')
-    #axs[0].scatter(s_times0[ind+1], s_vals0[ind+1], color='r')
 for ind in range(0, len_s_err1, 2):
     axs[0].plot(s_times1[ind+1:ind+3], s_vals1[ind+1:ind+3], 'b')
     axs[0].plot(s_times1[ind:ind+2], s_vals1[ind:ind+2], 'b:')
@@ -162,10 +146,6 @@ if len_times % 2:
 axs[1].plot([0, all_times[0]], [0, total_err[0]], 'k')
 axs[1].plot([0, all_times[0]], [0, rel_err[0]], 'c')
 for ind in range(0, len_times, 2):
-    #if np.any([all_times[ind] in t_jump[i] for i in range(2)]):
-    #    axs[1].plot(all_times[ind:ind+2], total_err[ind:ind+2], 'k:')
-    #else:
-    #    axs[1].plot(all_times[ind:ind+2], total_err[ind:ind+2], 'k')
     axs[1].plot(all_times[ind+1:ind+3], total_err[ind+1:ind+3], 'k')
     axs[1].plot(all_times[ind+1:ind+3], rel_err[ind+1:ind+3], 'c')
     axs[1].plot(all_times[ind:ind+2], total_err[ind:ind+2], 'k:')
@@ -196,12 +176,8 @@ for ind in range(2, len_l_times_min, 2):
 axs[0].legend(['Gut 1', 'Gut 2', 'Gut 3'])
 axs[1].legend(['absolut', 'relativ'])
 axs[2].legend(['Gut $1^+$', 'Gut $1^-$', 'Gut $3^+$', 'Gut $3^-$'])
-#axs[2].legend(['$\max \;\lambda_{i,v} - \lambda^{*}_{i, v}$', '$\min \;\lambda_{i,v} - \lambda^{*}_{i, v}$'])
-axs[0].set(ylabel='maximaler IDE-Fehler', xlim=(0,5.5))#, ylim=(0, 1 * 10**(-8)))# , ylim=(0, 1.2 * 10**(-8)), xlim=(0, 2.2), xticks=[0.135, 0.389, 0.48433, 0.5925, 0.731, 1.433, 1.56233, 1.723, 1.99333])
-#plt.setp(axs[0].get_xticklabels(), rotation=40, horizontalalignment='right', fontsize='x-small')
-axs[1].set(xlim=(0,5.5), ylabel='IDE-Gesamtfehler')#, ylim=(0, 1.2 * 10**(-8)), xlim=(0, 2.2), xticks=[0.135, 0.389, 0.48433, 0.54526, 0.647, 0.7474, 1.433, 1.56233, 1.723, 1.99333])
-#plt.setp(axs[1].get_xticklabels(), rotation=40, horizontalalignment='right', fontsize='x-small')
+axs[0].set(ylabel='maximaler IDE-Fehler', xlim=(0,5.5))
+axs[1].set(xlim=(0,5.5), ylabel='IDE-Gesamtfehler')
 axs[2].set(xlabel='Zeit', xlim=(0, 5.5), ylabel='Fehler im Knotenlabel')
 fig.tight_layout()
-#plt.savefig("tast.svg")
 plt.show()
