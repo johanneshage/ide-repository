@@ -1058,8 +1058,6 @@ class ContAppMultiOT:
                                 self.fp[ti][e_ind].append((theta, 0))
                                 self.fp_ind[ti][e_ind].append(theta_ind)
                                 if self.q_ind[e_ind][-1] != theta_ind and (self.q[e_ind] > self.eps or self.q_global[e_ind][-1] > self.eps or x_sum[e_ind] > self.nu[e_ind] + self.eps):
-                                    if e_ind == 29:
-                                        print()
                                     self.q_ind[e_ind].append(theta_ind)
                                 if self.q[e_ind] > self.eps:
                                     outflow_time = theta + self.q[e_ind]/self.nu[e_ind] + self.r[e_ind]
