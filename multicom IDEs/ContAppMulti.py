@@ -1240,20 +1240,20 @@ class ContAppMulti:
                                 # 'label_dif' > 0: geschieht nur aufgrund von Approximationsfehlern, für Kanten die aktiv sein sollten
                                 self.E_active[i, edge] = 1
 
-                l_star = []
+                # l_star = []
                 for i in range(self.I):
                     err_i = 0
                     err_i_rel = 0
-                    l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
-                    l_max = 0
-                    l_min = 0
+                    # l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
+                    # l_max = 0
+                    # l_min = 0
                     for v_ind in range(self.n):
                         if self.b[i, v_ind] > 0:
-                            l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
+                            """l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
                             if l_diff > l_max:
                                 l_max = l_diff
                             elif l_diff < l_min:
-                                l_min = l_diff
+                                l_min = l_diff"""
                             if len(delta_p_act[i][v_ind]) == 1:
                                 continue
                             vmax = -np.Inf
@@ -1262,17 +1262,10 @@ class ContAppMulti:
                                 w_ind = self.V.index(self.E[e_ind][1])
                                 val = self.labels[i][w_ind] + self.c[e_ind]
                                 if self.fp[i][e_ind][-1][1] > 0 and val > vmax:
-                                    if (i < 2 or i == 3) and theta > 13:
-                                        print()
                                     vmax = val
                                 if val < vmin:
-                                    if (i < 2 or i == 3) and theta == 13:
-                                        print()
                                     vmin = val
 
-                            if i < 2 or i == 3:
-                                if theta_ind >= 34:
-                                    print()
                             err_i += vmax - vmin
                             err_i_rel += (vmax - vmin) / self.b[i, v_ind]
                     if err_i < self.eps:
@@ -1280,11 +1273,8 @@ class ContAppMulti:
                         err_i_rel = 0
                     s_err[i].append((theta, err_i))
                     s_err_rel[i].append((theta, err_i_rel))
-                    if theta_ind >= 59 and (i ==1 or i== 3):
-                        lmaxxi = l_max
-                        print()
-                    l_err_max[i].append((theta, l_max))
-                    l_err_min[i].append((theta, l_min))
+                    # l_err_max[i].append((theta, l_max))
+                    # l_err_min[i].append((theta, l_min))
 
                 dp_act_old = copy.deepcopy(delta_p_act)
                 for i in range(self.I):
@@ -1334,20 +1324,20 @@ class ContAppMulti:
                             if self.fm[i][e_ind][-1][1] > self.eps:
                                 self.fm[i][e_ind].append((theta + self.r[e_ind], 0))
 
-                l_star = []
+                # l_star = []
                 for i in range(self.I):
                     err_i = 0
                     err_i_rel = 0
-                    l_max = 0
-                    l_min = 0
-                    l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
+                    # l_max = 0
+                    # l_min = 0
+                    # l_star.append(self.dijkstra(self.graphReversed, 't{}'.format(i+1), visited=[], distances={}, exact=True))
                     for v_ind in range(self.n):
                         if self.b[i, v_ind] > 0:
-                            l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
+                            """l_diff = self.labels[i][v_ind] - l_star[i][v_ind]
                             if l_diff > l_max:
                                 l_max = l_diff
                             elif l_diff < l_min:
-                                l_min = l_diff
+                                l_min = l_diff"""
                             if len(dp_act_old[i][v_ind]) == 1:
                                 continue
                             vmax = -np.Inf
@@ -1359,9 +1349,6 @@ class ContAppMulti:
                                     vmax = val
                                 if val < vmin:
                                     vmin = val
-                            if i < 2 or i == 3:
-                                if vmax - vmin > 2 * 10**(-6):
-                                    print()
                             err_i += vmax - vmin
                             err_i_rel += (vmax - vmin) / self.b[i, v_ind]
                     if err_i < self.eps:
@@ -1369,17 +1356,14 @@ class ContAppMulti:
                         err_i_rel = 0
                     s_err[i].append((theta, err_i))
                     s_err_rel[i].append((theta, err_i_rel))
-                    if theta_ind >= 59 and (i ==1 or i== 3):
-                        lmaxxii = l_max
-                        print()
-                    l_err_max[i].append((theta, l_max))
-                    l_err_min[i].append((theta, l_min))
-                with open('output_examples/VarianteD_err-5.txt', 'ab') as f:
+                    # l_err_max[i].append((theta, l_max))
+                    # l_err_min[i].append((theta, l_min))
+                """with open('output_examples/VarianteD_err-5.txt', 'ab') as f:
                     pickle.dump(s_err, f)
                     pickle.dump(s_err_rel, f)
                     pickle.dump(l_err_max, f)
                     pickle.dump(l_err_min, f)
-                    f.close()
+                    f.close()"""
 
         end_time = time.time()
         timediff1 = end_time - self.time_vor_main
@@ -1437,7 +1421,7 @@ class ContAppMulti:
             pickle.dump(self.global_phase, f)
             f.close()"""
 
-        output_json = open("output_examples/VarianteD-5.json", "w")
+        '''output_json = open("output_examples/VarianteD-5.json", "w")
         output_json.write('{"network": {\n "nodes": [')
         output_json.close()
         output_json = open("output_examples/VarianteD-5.json", "a")
@@ -1591,7 +1575,7 @@ class ContAppMulti:
             oj.close()
         output_json = open("output_examples/VarianteD-5.json", "a")
         output_json.write('] } }')
-        output_json.close()
+        output_json.close()'''
 
         nachwrite = time.time()
         writetime = nachwrite - end_time
